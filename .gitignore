@@ -10,6 +10,9 @@ Accounts/*.reg
 # Registry files directory - historical files
 registry_files/
 
+# Lock file - prevents concurrent script executions
+.lastwar.lock
+
 # PowerShell/Windows
 *.log
 *.tmp

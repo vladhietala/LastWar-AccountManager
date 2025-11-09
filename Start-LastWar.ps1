@@ -64,6 +64,91 @@ $script:REGEDIT_ROOT = if ($PSScriptRoot) {
 } else {
     Split-Path -Parent -Path $MyInvocation.MyCommand.Definition # Fallback
 }
+$script:LOCK_FILE = Join-Path -Path $script:REGEDIT_ROOT -ChildPath ".lastwar.lock"
+
+function Test-ScriptLock {
+    <#
+    .SYNOPSIS
+        Verifica se existe outra instância do script em execução
+
+    .DESCRIPTION
+        Verifica a existência de um arquivo de lock e valida se o processo associado ainda está ativo
+
+    .OUTPUTS
+        Retorna um objeto com IsLocked, AccountName, ProcessId, LockTime se houver lock ativo
+        Retorna $null se não houver lock ou se o processo já finalizou
+    #>
+    if (-not (Test-Path $script:LOCK_FILE)) {
+        return $null
+    }
+
+    try {
+        $lockContent = Get-Content $script:LOCK_FILE -Raw | ConvertFrom-Json
+
+        # Verifica se o processo ainda está ativo
+        $process = Get-Process -Id $lockContent.ProcessId -ErrorAction SilentlyContinue
+        if ($process) {
+            return [PSCustomObject]@{
+                IsLocked = $true
+                AccountName = $lockContent.AccountName
+                ProcessId = $lockContent.ProcessId
+                LockTime = $lockContent.LockTime
+            }
+        } else {
+            # Processo não existe mais, remove lock órfão
+            Remove-Item $script:LOCK_FILE -Force -ErrorAction SilentlyContinue
+            return $null
+        }
+    }
+    catch {
+        # Lock file corrompido ou ilegível, remove
+        Remove-Item $script:LOCK_FILE -Force -ErrorAction SilentlyContinue
+        return $null
+    }
+}
+
+function New-ScriptLock {
+    <#
+    .SYNOPSIS
+        Cria um arquivo de lock para prevenir execuções simultâneas
+
+    .PARAMETER AccountName
+        Nome da conta que está sendo executada
+    #>
+    param (
+        [string]$AccountName
+    )
+
+    $lockData = @{
+        AccountName = $AccountName
+        ProcessId = $PID
+        LockTime = (Get-Date).ToString("o")
+    } | ConvertTo-Json
+
+    try {
+        $lockData | Set-Content -Path $script:LOCK_FILE -Force
+        Write-Verbose "Lock criado: $script:LOCK_FILE (PID: $PID, Conta: $AccountName)"
+    }
+    catch {
+        throw "Erro ao criar arquivo de lock: $_"
+    }
+}
+
+function Remove-ScriptLock {
+    <#
+    .SYNOPSIS
+        Remove o arquivo de lock do script
+    #>
+    try {
+        if (Test-Path $script:LOCK_FILE) {
+            Remove-Item $script:LOCK_FILE -Force
+            Write-Verbose "Lock removido: $script:LOCK_FILE"
+        }
+    }
+    catch {
+        Write-Warning "Erro ao remover lock: $_"
+    }
+}
 
 function Initialize-Workspace {
     param (
@@ -208,8 +293,8 @@ function Start-GameProcess {
         Write-Host "Aguardando o jogo fechar..."
         $gameProcess.WaitForExit()
 
-        # Aguarda um pouco para garantir que atualizações sejam finalizadas
-        Start-Sleep -Seconds 2
+        # Aguarda um pouco para garantir que operações de escrita no registro sejam finalizadas
+        Start-Sleep -Seconds 1
     }
     catch {
         throw "Erro ao iniciar/monitorar o jogo: $_"
@@ -221,26 +306,58 @@ function Start-GameProcess {
 try {
     Write-Verbose "Script rodando a partir de: $($script:REGEDIT_ROOT)"
 
-    # Inicializa e verifica o ambiente
-    $regFilePath = Initialize-Workspace -Conta $Conta
-    Write-Host "Carregando conta $Conta a partir de: $regFilePath"
+    # Verifica se já existe outra instância em execução
+    $existingLock = Test-ScriptLock
+    if ($existingLock) {
+        $lockTime = [DateTime]::Parse($existingLock.LockTime)
+        $duration = (Get-Date) - $lockTime
+        Write-Host ""
+        Write-Host "================================================" -ForegroundColor Red
+        Write-Host "ERRO: Outra instância do script já está em execução!" -ForegroundColor Red
+        Write-Host "================================================" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "Conta em execução: $($existingLock.AccountName)" -ForegroundColor Yellow
+        Write-Host "Process ID: $($existingLock.ProcessId)" -ForegroundColor Yellow
+        Write-Host "Iniciado em: $($lockTime.ToString('dd/MM/yyyy HH:mm:ss'))" -ForegroundColor Yellow
+        Write-Host "Tempo decorrido: $([Math]::Floor($duration.TotalMinutes)) minutos e $($duration.Seconds) segundos" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "Aguarde a outra instância finalizar antes de iniciar uma nova." -ForegroundColor Cyan
+        Write-Host "Isso previne que o Export-GameRegistry de uma conta sobrescreva" -ForegroundColor Cyan
+        Write-Host "incorretamente o arquivo .reg de outra conta." -ForegroundColor Cyan
+        Write-Host ""
+        Start-Sleep -Seconds 10
+        exit 1
+    }
 
-    # Cria backup das configurações atuais
-    New-RegistryBackup -Path $script:REGEDIT_ROOT -Conta $Conta -SourceFile $regFilePath -MaxBackups $MaxBackups
+    # Cria o lock para esta instância
+    New-ScriptLock -AccountName $Conta
 
-    # Importa as configurações da conta
-    Import-GameRegistry -RegFilePath $regFilePath
+    try {
+        # Inicializa e verifica o ambiente
+        $regFilePath = Initialize-Workspace -Conta $Conta
+        Write-Host "Carregando conta $Conta a partir de: $regFilePath"
 
-    Start-Sleep -Seconds 1
+        # Cria backup das configurações atuais
+        New-RegistryBackup -Path $script:REGEDIT_ROOT -Conta $Conta -SourceFile $regFilePath -MaxBackups $MaxBackups
 
-    # Inicia o jogo e aguarda finalizar
-    Start-GameProcess
+        # Importa as configurações da conta
+        Import-GameRegistry -RegFilePath $regFilePath
 
-    # Exporta as novas configurações
-    Export-GameRegistry -RegFilePath $regFilePath
+        Start-Sleep -Seconds 1
 
-    Write-Host "Processo finalizado!"
-    Start-Sleep -Seconds 5
+        # Inicia o jogo e aguarda finalizar
+        Start-GameProcess
+
+        # Exporta as novas configurações
+        Export-GameRegistry -RegFilePath $regFilePath
+
+        Write-Host "Processo finalizado!"
+        Start-Sleep -Seconds 1
+    }
+    finally {
+        # Garante que o lock seja removido mesmo em caso de erro
+        Remove-ScriptLock
+    }
 }
 catch {
     Write-Error $_
