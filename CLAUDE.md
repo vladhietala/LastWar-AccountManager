@@ -17,30 +17,35 @@ This is a Windows Registry management system for "The Last War: Survival Game" t
    - Implements automatic backup system with deduplication
    - Account names are case-insensitive and dynamically discovered from Accounts/ folder
    - **Lock mechanism**: Prevents concurrent executions to avoid registry corruption
+   - **Auto-elevation**: Automatically requests administrator privileges when needed
 
-2. **Launch-LastWar.ps1** - Wrapper script
-   - Provides error logging to `%TEMP%\lastwar_error.log`
-   - Ensures correct working directory
-   - Delegates to Start-LastWar.ps1
-
-3. **Compare-LastWarKeys.ps1** - Utility for registry diffing
-   - Generates .reg files containing only differences between two registry keys
-   - Outputs deletion entries (`"name"=-`) for removed values
-   - Useful for understanding account-specific changes
-
-4. **Create-Shortcuts.ps1** - Shortcut management utility
+2. **Create-Shortcuts.ps1** - Shortcut management utility
    - Automatically discovers all accounts from Accounts/ folder
    - Creates/updates Windows Start Menu shortcuts for quick access
    - Removes orphaned shortcuts (accounts that no longer exist)
    - Uses dynamic paths (updates automatically when repository is moved)
    - Shortcuts are created in: `Start Menu\Programs\FirstFun\`
 
+### Utility Scripts (Tools/)
+
+3. **Tools/Compare-LastWarKeys.ps1** - Registry diffing utility
+   - Generates .reg files containing only differences between two registry keys
+   - Outputs deletion entries (`"name"=-`) for removed values
+   - Useful for understanding account-specific changes
+   - **Note**: Created during initial development when exploring registry key manipulation approach
+
+4. **Tools/Launch-LastWar.ps1** - Logging wrapper script (optional)
+   - Provides error logging to `%TEMP%\lastwar_error.log`
+   - Ensures correct working directory
+   - Delegates to Start-LastWar.ps1
+   - **Note**: Not actively used; kept for reference/debugging purposes
+
 ### Directory Structure
 
 ```
-Accounts/        - Active .reg files for each account (8 accounts currently)
+Accounts/        - Active .reg files for each account (dynamically discovered)
 Backups/         - Timestamped backups organized by account name
-registry_files/  - Historical/test registry files (not used by main scripts)
+Tools/           - Utility scripts (Compare-LastWarKeys.ps1, Launch-LastWar.ps1)
 .vscode/         - Contains PowerShell debug configuration
 ```
 
@@ -77,16 +82,16 @@ Registry files are Unicode-encoded Windows Registry Editor Version 5.00 format c
 .\Start-LastWar.ps1 -Conta <AccountName> -MaxBackups 15  # Customize backup retention
 ```
 
-### Running with error logging
+### Running with error logging (optional)
 ```powershell
-.\Launch-LastWar.ps1 -Conta <AccountName>
+.\Tools\Launch-LastWar.ps1 -Conta <AccountName>
 ```
 
-### Comparing two registry keys
+### Comparing two registry keys (utility)
 ```powershell
-.\Compare-LastWarKeys.ps1 -KeyPath1 "HKCU:\Software\FirstFun\LastWar-Account1" `
-                          -KeyPath2 "HKCU:\Software\FirstFun\LastWar-Account2" `
-                          -OutRegFile ".\Diff.reg"
+.\Tools\Compare-LastWarKeys.ps1 -KeyPath1 "HKCU:\Software\FirstFun\LastWar-Account1" `
+                                -KeyPath2 "HKCU:\Software\FirstFun\LastWar-Account2" `
+                                -OutRegFile ".\Diff.reg"
 ```
 
 ### Creating/updating Start Menu shortcuts
@@ -132,7 +137,8 @@ All scripts use proper error handling with try-catch blocks. The main script wil
 - Validate account existence before proceeding
 - Check for required files and paths
 - Throw descriptive errors with context
-- Log errors to temp directory when using Launch-LastWar.ps1
+- Display error messages in a user-friendly format with pause before closing
+- Guarantee lock cleanup even on errors (via try-finally blocks)
 
 ## Backup System Details
 
@@ -158,19 +164,21 @@ The game requires administrator privileges to run. The script handles this autom
 - Detects if running without admin privileges using `Test-Administrator` function
 - Automatically re-launches itself elevated using `Start-Process -Verb RunAs`
 - Preserves all command-line parameters (`-Conta`, `-MaxBackups`, `-Verbose`)
-- Uses `-Wait` to ensure the elevated process completes before the original exits
 - Displays clear messages during elevation process
+- Uses `$PSCommandPath` with fallbacks for reliable script path resolution
 
 ### Benefits
 - **No manual UAC prompts during gameplay**: UAC prompt appears once at script start
 - **Seamless experience**: Users don't need to manually run as admin
 - **Works with shortcuts**: Start Menu shortcuts work normally without special configuration
+- **Single window**: Elevated process runs independently, original process exits cleanly
 - **Fail-safe**: If elevation fails, shows clear error message
 
 ### Behavior
 - If already running as admin: continues normally (no re-launch)
-- If not admin: shows yellow banner, requests elevation, waits for completion
-- If user cancels UAC: exits gracefully with error message
+- If not admin: shows yellow banner, requests elevation, original process exits
+- If user cancels UAC: elevated process never starts, clean exit
+- Pre-elevation window is visible for debugging purposes
 
 ## Concurrency Control (Lock System)
 
