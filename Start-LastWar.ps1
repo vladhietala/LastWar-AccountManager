@@ -572,24 +572,69 @@ function New-RegistryBackup {
     }
 }
 
+function Invoke-RegistryCommand {
+    <#
+    .SYNOPSIS
+        Executa comandos reg.exe com tratamento de erro padronizado
+
+    .PARAMETER Operation
+        A operação a executar (import, export, etc)
+
+    .PARAMETER Arguments
+        Array de argumentos para passar ao reg.exe
+
+    .PARAMETER SuccessMessage
+        Mensagem a exibir em caso de sucesso
+
+    .PARAMETER ErrorContext
+        Contexto do erro para mensagens mais claras
+
+    .OUTPUTS
+        Retorna $true se sucesso, lança exceção se falhar
+    #>
+    param(
+        [Parameter(Mandatory)]
+        [ValidateSet('import', 'export')]
+        [string]$Operation,
+
+        [Parameter(Mandatory)]
+        [string[]]$Arguments,
+
+        [Parameter(Mandatory)]
+        [string]$SuccessMessage,
+
+        [Parameter(Mandatory)]
+        [string]$ErrorContext
+    )
+
+    try {
+        $result = & reg $Operation @Arguments 2>&1
+
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host $SuccessMessage
+            return $true
+        }
+        else {
+            throw ("reg {0} retornou erro (código {1}): {2}" -f $Operation, $LASTEXITCODE, $result)
+        }
+    }
+    catch {
+        throw ("{0}: {1}" -f $ErrorContext, $_)
+    }
+}
+
 function Import-GameRegistry {
     param (
         [string]$RegFilePath
     )
 
     Write-Host "Importando configurações do registro..."
-    try {
-        $result = reg import $RegFilePath 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "Configurações importadas com sucesso"
-        }
-        else {
-            throw "reg import retornou erro: $result"
-        }
-    }
-    catch {
-        throw "Erro ao importar configurações: $_"
-    }
+
+    Invoke-RegistryCommand `
+        -Operation 'import' `
+        -Arguments @($RegFilePath) `
+        -SuccessMessage "Configurações importadas com sucesso" `
+        -ErrorContext "Erro ao importar configurações"
 }
 
 function Export-GameRegistry {
@@ -598,18 +643,12 @@ function Export-GameRegistry {
     )
 
     Write-Host "Atualizando arquivo de registro com as novas configurações..."
-    try {
-        $result = reg export $script:REGISTRY_PATH $RegFilePath /y 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "Configurações salvas com sucesso"
-        }
-        else {
-            throw "reg export retornou erro: $result"
-        }
-    }
-    catch {
-        throw "Erro ao salvar configurações: $_"
-    }
+
+    Invoke-RegistryCommand `
+        -Operation 'export' `
+        -Arguments @($script:REGISTRY_PATH, $RegFilePath, '/y') `
+        -SuccessMessage "Configurações salvas com sucesso" `
+        -ErrorContext "Erro ao salvar configurações"
 }
 
 function Find-GameProcess {
