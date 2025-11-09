@@ -90,10 +90,12 @@ Use VSCode's PowerShell debugging (F5) or run with `-Verbose` flag:
 
 ## Important Constants
 
+- **Repository Location**: `D:\source\repos\LastWar-AccountManager\`
 - **Registry Path**: `HKEY_CURRENT_USER\Software\FirstFun\Last War-Survival Game`
 - **Game Launcher**: `C:\Users\vladh\AppData\Local\TheLastWar\Launch.exe`
 - **Game Root**: `C:\Users\vladh\AppData\Local\TheLastWar`
 - **Default Max Backups**: 10 per account
+- **GitHub Repository**: `https://github.com/vladhietala/LastWar-AccountManager.git` (private)
 
 ## Script Requirements
 
