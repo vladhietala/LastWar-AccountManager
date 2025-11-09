@@ -56,8 +56,9 @@ $Conta = $matched
 
 # Constantes
 $script:REGISTRY_PATH = "HKEY_CURRENT_USER\Software\FirstFun\Last War-Survival Game"
-$script:LAUNCHER_PATH = "C:\Users\vladh\AppData\Local\TheLastWar\Launch.exe"
-$script:GAME_ROOT = "C:\Users\vladh\AppData\Local\TheLastWar"
+$script:GAME_ROOT = Join-Path -Path $env:LOCALAPPDATA -ChildPath "TheLastWar"
+$script:LAUNCHER_PATH = Join-Path -Path $script:GAME_ROOT -ChildPath "Launch.exe"
+
 # Determina o diretório do script mesmo quando executado com -NoProfile
 $script:REGEDIT_ROOT = if ($PSScriptRoot) {
     $PSScriptRoot # Usa $PSScriptRoot se disponível
@@ -65,6 +66,36 @@ $script:REGEDIT_ROOT = if ($PSScriptRoot) {
     Split-Path -Parent -Path $MyInvocation.MyCommand.Definition # Fallback
 }
 $script:LOCK_FILE = Join-Path -Path $script:REGEDIT_ROOT -ChildPath ".lastwar.lock"
+
+# Timing Constants
+$script:GAME_PROCESS_TIMEOUT_SECONDS = 90
+$script:REGISTRY_WRITE_GRACE_PERIOD_SECONDS = 1
+$script:ERROR_MESSAGE_DISPLAY_SECONDS = 10
+$script:POST_IMPORT_DELAY_SECONDS = 1
+$script:VERBOSE_STATUS_INTERVAL_SECONDS = 10
+
+function Test-GameInstallation {
+    <#
+    .SYNOPSIS
+        Valida que o jogo está instalado e acessível
+
+    .DESCRIPTION
+        Verifica se o diretório do jogo e o launcher existem antes de tentar executar
+
+    .THROWS
+        Lança exceção se o jogo não estiver instalado corretamente
+    #>
+
+    if (-not (Test-Path $script:GAME_ROOT)) {
+        throw "Diretório do jogo não encontrado: $script:GAME_ROOT`nVerifique se o jogo está instalado."
+    }
+
+    if (-not (Test-Path $script:LAUNCHER_PATH)) {
+        throw "Launcher do jogo não encontrado: $script:LAUNCHER_PATH`nVerifique a instalação do jogo."
+    }
+
+    Write-Verbose "Instalação do jogo validada: $script:GAME_ROOT"
+}
 
 function Test-ScriptLock {
     <#
@@ -157,6 +188,46 @@ function Test-Administrator {
     #>
     $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
     return $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function Show-ErrorMessage {
+    <#
+    .SYNOPSIS
+        Exibe mensagem de erro formatada de forma consistente
+
+    .PARAMETER ErrorRecord
+        O registro de erro a ser exibido
+
+    .PARAMETER Title
+        Título da mensagem de erro (padrão: "ERRO CRÍTICO")
+
+    .PARAMETER WaitForKeyPress
+        Se deve aguardar o usuário pressionar uma tecla antes de continuar
+    #>
+    param(
+        [Parameter(Mandatory)]
+        [System.Management.Automation.ErrorRecord]$ErrorRecord,
+
+        [string]$Title = "ERRO CRÍTICO",
+
+        [switch]$WaitForKeyPress
+    )
+
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Red
+    Write-Host "  $Title" -ForegroundColor Red
+    Write-Host "========================================" -ForegroundColor Red
+    Write-Host ""
+    Write-Host $ErrorRecord.Exception.Message -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Detalhes técnicos:" -ForegroundColor Yellow
+    Write-Host $ErrorRecord.ScriptStackTrace -ForegroundColor Gray
+    Write-Host ""
+
+    if ($WaitForKeyPress) {
+        Write-Host "Pressione qualquer tecla para fechar..." -ForegroundColor Cyan
+        $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+    }
 }
 
 function Request-Elevation {
@@ -347,8 +418,7 @@ function Find-GameProcess {
     param()
 
     # Aguarda até encontrar o processo do jogo
-    # Timeout aumentado para 90 segundos para dar tempo de aceitar UAC (caso o script não esteja elevado)
-    $maxAttempts = 90
+    $maxAttempts = $script:GAME_PROCESS_TIMEOUT_SECONDS
     $attempt = 0
     $gameProcess = $null
 
@@ -363,8 +433,8 @@ function Find-GameProcess {
             return $gameProcess
         }
 
-        # Mostra progresso a cada 10 segundos
-        if (($attempt % 10) -eq 0 -and $attempt -gt 0) {
+        # Mostra progresso periodicamente
+        if (($attempt % $script:VERBOSE_STATUS_INTERVAL_SECONDS) -eq 0 -and $attempt -gt 0) {
             Write-Verbose "Ainda aguardando processo do jogo... ($attempt/$maxAttempts segundos)"
         }
 
@@ -389,7 +459,7 @@ function Start-GameProcess {
         $gameProcess.WaitForExit()
 
         # Aguarda um pouco para garantir que operações de escrita no registro sejam finalizadas
-        Start-Sleep -Seconds 1
+        Start-Sleep -Seconds $script:REGISTRY_WRITE_GRACE_PERIOD_SECONDS
     }
     catch {
         throw "Erro ao iniciar/monitorar o jogo: $_"
@@ -400,6 +470,9 @@ function Start-GameProcess {
 
 try {
     Write-Verbose "Script rodando a partir de: $($script:REGEDIT_ROOT)"
+
+    # Valida instalação do jogo
+    Test-GameInstallation
 
     # Verifica se já existe outra instância em execução
     $existingLock = Test-ScriptLock
@@ -420,7 +493,7 @@ try {
         Write-Host "Isso previne que o Export-GameRegistry de uma conta sobrescreva" -ForegroundColor Cyan
         Write-Host "incorretamente o arquivo .reg de outra conta." -ForegroundColor Cyan
         Write-Host ""
-        Start-Sleep -Seconds 10
+        Start-Sleep -Seconds $script:ERROR_MESSAGE_DISPLAY_SECONDS
         exit 1
     }
 
@@ -443,7 +516,7 @@ try {
         # Importa as configurações da conta
         Import-GameRegistry -RegFilePath $regFilePath
 
-        Start-Sleep -Seconds 1
+        Start-Sleep -Seconds $script:POST_IMPORT_DELAY_SECONDS
 
         # Inicia o jogo e aguarda finalizar
         Start-GameProcess
@@ -452,7 +525,7 @@ try {
         Export-GameRegistry -RegFilePath $regFilePath
 
         Write-Host "Processo finalizado!"
-        Start-Sleep -Seconds 1
+        Start-Sleep -Seconds $script:REGISTRY_WRITE_GRACE_PERIOD_SECONDS
     }
     catch {
         # Captura erro dentro do try interno, mas ainda remove o lock no finally
@@ -465,17 +538,6 @@ try {
 }
 catch {
     # Erro já foi tratado (lock foi removido no finally acima)
-    Write-Host ""
-    Write-Host "========================================" -ForegroundColor Red
-    Write-Host "  ERRO CRÍTICO" -ForegroundColor Red
-    Write-Host "========================================" -ForegroundColor Red
-    Write-Host ""
-    Write-Host $_.Exception.Message -ForegroundColor Red
-    Write-Host ""
-    Write-Host "Detalhes técnicos:" -ForegroundColor Yellow
-    Write-Host $_.ScriptStackTrace -ForegroundColor Gray
-    Write-Host ""
-    Write-Host "Pressione qualquer tecla para fechar..." -ForegroundColor Cyan
-    $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+    Show-ErrorMessage -ErrorRecord $_ -WaitForKeyPress
     exit 1
 }
