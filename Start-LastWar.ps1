@@ -170,6 +170,48 @@ function Remove-OrphanedLock {
     }
 }
 
+function Assert-NoExistingLock {
+    <#
+    .SYNOPSIS
+        Verifica se existe um lock ativo e aborta a execução se houver
+
+    .DESCRIPTION
+        Valida que não há outra instância do script em execução.
+        Se houver, exibe mensagem de erro detalhada e encerra o processo.
+    #>
+    $existingLock = Test-ScriptLock
+
+    if (-not ($existingLock -and $existingLock.IsLocked)) {
+        return  # Sem lock ativo, pode continuar
+    }
+
+    # ConvertFrom-Json já deserializa ISO 8601 para DateTime
+    $lockTime = if ($existingLock.LockTime -is [DateTime]) {
+        $existingLock.LockTime
+    } else {
+        [DateTime]::ParseExact($existingLock.LockTime, "o", [System.Globalization.CultureInfo]::InvariantCulture)
+    }
+
+    $duration = (Get-Date) - $lockTime
+
+    Write-Host ""
+    Write-Host "================================================" -ForegroundColor Red
+    Write-Host "ERRO: Outra instância do script já está em execução!" -ForegroundColor Red
+    Write-Host "================================================" -ForegroundColor Red
+    Write-Host ""
+    Write-Host ("Conta em execução: {0}" -f $existingLock.AccountName) -ForegroundColor Yellow
+    Write-Host ("Process ID: {0}" -f $existingLock.ProcessId) -ForegroundColor Yellow
+    Write-Host ("Iniciado em: {0}" -f $lockTime.ToString('dd/MM/yyyy HH:mm:ss')) -ForegroundColor Yellow
+    Write-Host ("Tempo decorrido: {0} minutos e {1} segundos" -f [Math]::Floor($duration.TotalMinutes), $duration.Seconds) -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Aguarde a outra instância finalizar antes de iniciar uma nova." -ForegroundColor Cyan
+    Write-Host "Isso previne que o Export-GameRegistry de uma conta sobrescreva" -ForegroundColor Cyan
+    Write-Host "incorretamente o arquivo .reg de outra conta." -ForegroundColor Cyan
+    Write-Host ""
+    Start-Sleep -Seconds $script:ERROR_MESSAGE_DISPLAY_SECONDS
+    exit 1
+}
+
 function New-ScriptLock {
     <#
     .SYNOPSIS
@@ -631,36 +673,9 @@ try {
     # Valida instalação do jogo
     Test-GameInstallation
 
-    # Remove locks órfãos antes de verificar
+    # Remove locks órfãos e verifica se há outra instância em execução
     Remove-OrphanedLock
-
-    # Verifica se já existe outra instância em execução
-    $existingLock = Test-ScriptLock
-    if ($existingLock -and $existingLock.IsLocked) {
-        # ConvertFrom-Json já deserializa ISO 8601 para DateTime
-        $lockTime = if ($existingLock.LockTime -is [DateTime]) {
-            $existingLock.LockTime
-        } else {
-            [DateTime]::ParseExact($existingLock.LockTime, "o", [System.Globalization.CultureInfo]::InvariantCulture)
-        }
-        $duration = (Get-Date) - $lockTime
-        Write-Host ""
-        Write-Host "================================================" -ForegroundColor Red
-        Write-Host "ERRO: Outra instância do script já está em execução!" -ForegroundColor Red
-        Write-Host "================================================" -ForegroundColor Red
-        Write-Host ""
-        Write-Host ("Conta em execução: {0}" -f $existingLock.AccountName) -ForegroundColor Yellow
-        Write-Host ("Process ID: {0}" -f $existingLock.ProcessId) -ForegroundColor Yellow
-        Write-Host ("Iniciado em: {0}" -f $lockTime.ToString('dd/MM/yyyy HH:mm:ss')) -ForegroundColor Yellow
-        Write-Host ("Tempo decorrido: {0} minutos e {1} segundos" -f [Math]::Floor($duration.TotalMinutes), $duration.Seconds) -ForegroundColor Yellow
-        Write-Host ""
-        Write-Host "Aguarde a outra instância finalizar antes de iniciar uma nova." -ForegroundColor Cyan
-        Write-Host "Isso previne que o Export-GameRegistry de uma conta sobrescreva" -ForegroundColor Cyan
-        Write-Host "incorretamente o arquivo .reg de outra conta." -ForegroundColor Cyan
-        Write-Host ""
-        Start-Sleep -Seconds $script:ERROR_MESSAGE_DISPLAY_SECONDS
-        exit 1
-    }
+    Assert-NoExistingLock
 
     # Verifica se precisa elevar privilégios (após validações de lock)
     if (-not (Test-Administrator)) {
