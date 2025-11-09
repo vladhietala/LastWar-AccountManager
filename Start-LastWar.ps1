@@ -704,6 +704,54 @@ function Start-GameProcess {
     }
 }
 
+function Invoke-AccountSwitch {
+    <#
+    .SYNOPSIS
+        Orquestra o fluxo completo de troca de conta
+
+    .DESCRIPTION
+        Executa o fluxo completo para trocar de conta:
+        1. Inicializa workspace e valida arquivo da conta
+        2. Cria backup do estado atual da conta
+        3. Importa configurações de registro da conta
+        4. Inicia o jogo e aguarda finalização
+        5. Exporta configurações de registro atualizadas
+
+    .PARAMETER Conta
+        Nome da conta a ser carregada
+
+    .PARAMETER MaxBackups
+        Número máximo de backups a manter por conta
+    #>
+    param(
+        [Parameter(Mandatory)]
+        [string]$Conta,
+
+        [Parameter(Mandatory)]
+        [int]$MaxBackups
+    )
+
+    # Inicializa e verifica o ambiente
+    $regFilePath = Initialize-Workspace -Conta $Conta
+    Write-Host ("Carregando conta {0} a partir de: {1}" -f $Conta, $regFilePath)
+
+    # Cria backup das configurações atuais
+    New-RegistryBackup -Path $script:REGEDIT_ROOT -Conta $Conta -SourceFile $regFilePath -MaxBackups $MaxBackups
+
+    # Importa as configurações da conta
+    Import-GameRegistry -RegFilePath $regFilePath
+
+    Start-Sleep -Seconds $script:POST_IMPORT_DELAY_SECONDS
+
+    # Inicia o jogo e aguarda finalizar
+    Start-GameProcess
+
+    # Exporta as novas configurações
+    Export-GameRegistry -RegFilePath $regFilePath
+
+    Write-Host "Processo finalizado!"
+    Start-Sleep -Seconds $script:REGISTRY_WRITE_GRACE_PERIOD_SECONDS
+}
 
 
 try {
@@ -725,26 +773,7 @@ try {
     New-ScriptLock -AccountName $Conta
 
     try {
-        # Inicializa e verifica o ambiente
-        $regFilePath = Initialize-Workspace -Conta $Conta
-        Write-Host "Carregando conta $Conta a partir de: $regFilePath"
-
-        # Cria backup das configurações atuais
-        New-RegistryBackup -Path $script:REGEDIT_ROOT -Conta $Conta -SourceFile $regFilePath -MaxBackups $MaxBackups
-
-        # Importa as configurações da conta
-        Import-GameRegistry -RegFilePath $regFilePath
-
-        Start-Sleep -Seconds $script:POST_IMPORT_DELAY_SECONDS
-
-        # Inicia o jogo e aguarda finalizar
-        Start-GameProcess
-
-        # Exporta as novas configurações
-        Export-GameRegistry -RegFilePath $regFilePath
-
-        Write-Host "Processo finalizado!"
-        Start-Sleep -Seconds $script:REGISTRY_WRITE_GRACE_PERIOD_SECONDS
+        Invoke-AccountSwitch -Conta $Conta -MaxBackups $MaxBackups
     }
     catch {
         # Captura erro dentro do try interno, mas ainda remove o lock no finally
