@@ -228,17 +228,30 @@ function Test-Administrator {
 function Get-ScriptFullPath {
     <#
     .SYNOPSIS
-        Obtém o caminho completo do script atual com fallbacks
+        Obtém o caminho completo do script principal com fallbacks
 
     .DESCRIPTION
-        Tenta múltiplas estratégias para obter o caminho do script,
-        garantindo compatibilidade em diferentes contextos de execução
+        Tenta múltiplas estratégias para obter o caminho do script principal (Start-LastWar.ps1),
+        garantindo compatibilidade em diferentes contextos de execução.
+
+        IMPORTANTE: Usa $script:MAIN_SCRIPT_PATH quando disponível, que é definido no
+        Start-LastWar.ps1 antes de fazer dot-source do Functions.ps1. Isso garante que
+        sempre retorne o caminho do script principal, não do Functions.ps1.
     #>
-    if ($PSCommandPath) {
+    # Usa MAIN_SCRIPT_PATH se foi definido pelo script principal
+    if ($script:MAIN_SCRIPT_PATH) {
+        return $script:MAIN_SCRIPT_PATH
+    }
+    # Fallback para PSCommandPath (contexto de testes ou execução direta)
+    elseif ($PSCommandPath) {
         return $PSCommandPath
-    } elseif ($MyInvocation.MyCommand.Path) {
+    }
+    # Fallback para MyInvocation (contextos mais antigos)
+    elseif ($MyInvocation.MyCommand.Path) {
         return $MyInvocation.MyCommand.Path
-    } else {
+    }
+    # Último fallback: constrói caminho baseado no diretório
+    else {
         return Join-Path -Path $script:REGEDIT_ROOT -ChildPath "Start-LastWar.ps1"
     }
 }

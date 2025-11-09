@@ -36,6 +36,9 @@ param (
     [int]$MaxBackups = 10
 )
 
+# Caminho completo do script principal (deve ser definido ANTES do dot-sourcing para elevação de privilégios)
+$script:MAIN_SCRIPT_PATH = $PSCommandPath
+
 # Import de funções
 . "$PSScriptRoot\Start-LastWar.Functions.ps1"
 
@@ -89,9 +92,9 @@ try {
     Assert-NoExistingLock
 
     # Verifica se precisa elevar privilégios (após validações de lock)
-    # if (-not (Test-Administrator)) {
+    if (-not (Test-Administrator)) {
         Request-Elevation -Conta $Conta -MaxBackups $MaxBackups -BoundParameters $PSBoundParameters
-    # }
+    }
 
     # Cria o lock para esta instância
     New-ScriptLock -AccountName $Conta
