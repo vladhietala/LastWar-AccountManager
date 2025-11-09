@@ -1,0 +1,26 @@
+# Backups directory - contains timestamped backups
+Backups/
+
+# Account registry files - may contain sensitive game data
+Accounts/*.reg
+
+# Keep the Accounts folder structure but ignore all .reg files
+!Accounts/.gitkeep
+
+# Registry files directory - historical files
+registry_files/
+
+# PowerShell/Windows
+*.log
+*.tmp
+
+# VSCode settings (optional - uncomment if you want to ignore)
+# .vscode/
+
+# Windows thumbnail cache
+Thumbs.db
+desktop.ini
+
+# Temporary files
+~*
+*.bak
