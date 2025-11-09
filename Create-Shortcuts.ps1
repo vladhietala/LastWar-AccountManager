@@ -46,7 +46,7 @@ param (
 
 # Constantes
 $script:REPO_PATH = $PSScriptRoot
-$script:LAUNCH_SCRIPT = Join-Path -Path $script:REPO_PATH -ChildPath "Launch-LastWar.ps1"
+$script:LAUNCH_SCRIPT = Join-Path -Path $script:REPO_PATH -ChildPath "Start-LastWar.ps1"
 $script:PWSH_PATH = "C:\Program Files\PowerShell\7\pwsh.exe"
 $script:SHORTCUTS_FOLDER = Join-Path -Path $env:APPDATA -ChildPath "Microsoft\Windows\Start Menu\Programs\FirstFun"
 $script:ACCOUNTS_FOLDER = Join-Path -Path $script:REPO_PATH -ChildPath "Accounts"
@@ -197,10 +197,10 @@ function New-AccountShortcut {
 
         # Configura propriedades do atalho
         $shortcut.TargetPath = $script:PWSH_PATH
-        $shortcut.Arguments = "-nop -nol -noni -w hidden -file `"$script:LAUNCH_SCRIPT`" -Conta `"$AccountName`""
+        $shortcut.Arguments = "-nop -file `"$script:LAUNCH_SCRIPT`" -Conta `"$AccountName`""
         $shortcut.WorkingDirectory = $script:REPO_PATH
         $shortcut.Description = "Inicia LastWar com a conta $AccountName"
-        $shortcut.WindowStyle = 7  # Minimizado
+        $shortcut.WindowStyle = 1  # Normal (visível)
 
         # Define ícone se fornecido
         if ($IconPath -and (Test-Path $IconPath)) {

@@ -186,11 +186,22 @@ function Request-Elevation {
     Write-Host ""
 
     try {
+        # Obtém o caminho completo do script atual
+        $scriptFullPath = if ($PSCommandPath) {
+            $PSCommandPath
+        } elseif ($MyInvocation.MyCommand.Path) {
+            $MyInvocation.MyCommand.Path
+        } else {
+            Join-Path -Path $script:REGEDIT_ROOT -ChildPath "Start-LastWar.ps1"
+        }
+
+        Write-Verbose "Caminho do script para elevação: $scriptFullPath"
+
         # Reconstrói os argumentos para passar ao processo elevado
         $argList = @(
             "-NoProfile"
             "-ExecutionPolicy", "Bypass"
-            "-File", "`"$($MyInvocation.MyCommand.Path)`""
+            "-File", "`"$scriptFullPath`""
             "-Conta", "`"$Conta`""
             "-MaxBackups", $MaxBackups
         )
@@ -200,8 +211,14 @@ function Request-Elevation {
             $argList += "-Verbose"
         }
 
+        Write-Verbose "Argumentos para processo elevado: $($argList -join ' ')"
+
         # Inicia processo elevado
-        Start-Process -FilePath "pwsh.exe" -ArgumentList $argList -Verb RunAs -Wait
+        # Nota: -Wait não funciona perfeitamente com -Verb RunAs
+        # O processo elevado deve gerenciar sua própria vida útil
+        $process = Start-Process -FilePath "pwsh.exe" -ArgumentList $argList -Verb RunAs -PassThru
+
+        Write-Verbose "Processo elevado iniciado com PID: $($process.Id)"
 
         # Sai do processo não-elevado
         exit 0
@@ -437,12 +454,28 @@ try {
         Write-Host "Processo finalizado!"
         Start-Sleep -Seconds 1
     }
+    catch {
+        # Captura erro dentro do try interno, mas ainda remove o lock no finally
+        throw
+    }
     finally {
         # Garante que o lock seja removido mesmo em caso de erro
         Remove-ScriptLock
     }
 }
 catch {
-    Write-Error $_
+    # Erro já foi tratado (lock foi removido no finally acima)
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Red
+    Write-Host "  ERRO CRÍTICO" -ForegroundColor Red
+    Write-Host "========================================" -ForegroundColor Red
+    Write-Host ""
+    Write-Host $_.Exception.Message -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Detalhes técnicos:" -ForegroundColor Yellow
+    Write-Host $_.ScriptStackTrace -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "Pressione qualquer tecla para fechar..." -ForegroundColor Cyan
+    $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
     exit 1
 }

@@ -13,6 +13,9 @@ registry_files/
 # Lock file - prevents concurrent script executions
 .lastwar.lock
 
+# Claude Code temporary directory
+.claude/
+
 # PowerShell/Windows
 *.log
 *.tmp
