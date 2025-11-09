@@ -124,6 +124,7 @@ Use VSCode's PowerShell debugging (F5) or run with `-Verbose` flag:
 - PowerShell Core (`#Requires -PSEdition core` in Start-LastWar.ps1)
 - Windows Registry access (uses `reg.exe` commands)
 - Write permissions to script directory for backups
+- **Administrator privileges**: The script automatically elevates itself when needed (auto-elevation)
 
 ## Error Handling
 
@@ -144,9 +145,32 @@ All scripts use proper error handling with try-catch blocks. The main script wil
 
 The game launch process uses a polling mechanism:
 - Searches for processes matching `*LastWar*` pattern
-- 30-second timeout with 1-second intervals
+- 90-second timeout with 1-second intervals (increased to accommodate UAC prompts)
+- Progress messages every 10 seconds when using `-Verbose`
 - Waits for game process to exit before exporting registry changes
 - 1-second grace period after exit for write operations to complete
+
+## Administrator Privileges (Auto-Elevation)
+
+The game requires administrator privileges to run. The script handles this automatically:
+
+### Auto-Elevation Mechanism
+- Detects if running without admin privileges using `Test-Administrator` function
+- Automatically re-launches itself elevated using `Start-Process -Verb RunAs`
+- Preserves all command-line parameters (`-Conta`, `-MaxBackups`, `-Verbose`)
+- Uses `-Wait` to ensure the elevated process completes before the original exits
+- Displays clear messages during elevation process
+
+### Benefits
+- **No manual UAC prompts during gameplay**: UAC prompt appears once at script start
+- **Seamless experience**: Users don't need to manually run as admin
+- **Works with shortcuts**: Start Menu shortcuts work normally without special configuration
+- **Fail-safe**: If elevation fails, shows clear error message
+
+### Behavior
+- If already running as admin: continues normally (no re-launch)
+- If not admin: shows yellow banner, requests elevation, waits for completion
+- If user cancels UAC: exits gracefully with error message
 
 ## Concurrency Control (Lock System)
 

@@ -150,6 +150,76 @@ function Remove-ScriptLock {
     }
 }
 
+function Test-Administrator {
+    <#
+    .SYNOPSIS
+        Verifica se o script está sendo executado com privilégios de administrador
+    #>
+    $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+    return $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function Request-Elevation {
+    <#
+    .SYNOPSIS
+        Solicita elevação de privilégios e relança o script como administrador
+
+    .PARAMETER Conta
+        Nome da conta que está sendo carregada
+
+    .PARAMETER MaxBackups
+        Número máximo de backups
+    #>
+    param (
+        [string]$Conta,
+        [int]$MaxBackups,
+        [hashtable]$BoundParameters
+    )
+
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Yellow
+    Write-Host "  Elevação de Privilégios Necessária" -ForegroundColor Yellow
+    Write-Host "========================================" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "O jogo requer permissões de administrador." -ForegroundColor Cyan
+    Write-Host "Solicitando elevação..." -ForegroundColor Cyan
+    Write-Host ""
+
+    try {
+        # Reconstrói os argumentos para passar ao processo elevado
+        $argList = @(
+            "-NoProfile"
+            "-ExecutionPolicy", "Bypass"
+            "-File", "`"$($MyInvocation.MyCommand.Path)`""
+            "-Conta", "`"$Conta`""
+            "-MaxBackups", $MaxBackups
+        )
+
+        # Adiciona -Verbose se estiver ativo
+        if ($BoundParameters['Verbose']) {
+            $argList += "-Verbose"
+        }
+
+        # Inicia processo elevado
+        Start-Process -FilePath "pwsh.exe" -ArgumentList $argList -Verb RunAs -Wait
+
+        # Sai do processo não-elevado
+        exit 0
+    }
+    catch {
+        Write-Host ""
+        Write-Host "========================================" -ForegroundColor Red
+        Write-Host "  ERRO" -ForegroundColor Red
+        Write-Host "========================================" -ForegroundColor Red
+        Write-Host "Falha ao elevar privilégios: $_" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "O script precisa ser executado como administrador." -ForegroundColor Yellow
+        Write-Host ""
+        Start-Sleep -Seconds 5
+        exit 1
+    }
+}
+
 function Initialize-Workspace {
     param (
         [string]$Conta
@@ -260,17 +330,25 @@ function Find-GameProcess {
     param()
 
     # Aguarda até encontrar o processo do jogo
-    $maxAttempts = 30 # 30 segundos
+    # Timeout aumentado para 90 segundos para dar tempo de aceitar UAC (caso o script não esteja elevado)
+    $maxAttempts = 90
     $attempt = 0
     $gameProcess = $null
 
+    Write-Verbose "Procurando processo do jogo (timeout: $maxAttempts segundos)..."
+
     while ($attempt -lt $maxAttempts) {
         # Procura por LastWar.exe em qualquer pasta 'app-x.x.x
-        $gameProcess = Get-Process -Name "*LastWar*" | Select-Object -First 1
+        $gameProcess = Get-Process -Name "*LastWar*" -ErrorAction SilentlyContinue | Select-Object -First 1
 
         if ($gameProcess) {
             Write-Host "Processo do jogo encontrado: $($gameProcess.Path)"
             return $gameProcess
+        }
+
+        # Mostra progresso a cada 10 segundos
+        if (($attempt % 10) -eq 0 -and $attempt -gt 0) {
+            Write-Verbose "Ainda aguardando processo do jogo... ($attempt/$maxAttempts segundos)"
         }
 
         Start-Sleep -Seconds 1
@@ -327,6 +405,11 @@ try {
         Write-Host ""
         Start-Sleep -Seconds 10
         exit 1
+    }
+
+    # Verifica se precisa elevar privilégios (após validações de lock)
+    if (-not (Test-Administrator)) {
+        Request-Elevation -Conta $Conta -MaxBackups $MaxBackups -BoundParameters $PSBoundParameters
     }
 
     # Cria o lock para esta instância
