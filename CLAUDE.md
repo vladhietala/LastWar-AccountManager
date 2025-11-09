@@ -93,6 +93,7 @@ Registry files are Unicode-encoded Windows Registry Editor Version 5.00 format c
 ```powershell
 .\Create-Shortcuts.ps1
 .\Create-Shortcuts.ps1 -IconPath "C:\Icons\game.ico"  # With custom icon
+.\Create-Shortcuts.ps1 -PinToStart                    # Try to pin to Start Menu (may not work on all Windows versions)
 ```
 
 ### Adding a new account
@@ -173,11 +174,12 @@ To prevent registry corruption from simultaneous executions:
 The repository includes a script for managing Start Menu shortcuts:
 
 ### Create-Shortcuts.ps1
-- **Auto-discovery**: Scans Accounts/ folder for all .reg files
+- **Auto-discovery**: Scans Accounts/ folder for all .reg files (excludes templates like Initial.reg)
 - **Creates shortcuts**: In `Start Menu\Programs\FirstFun\` for each account
-- **Orphan cleanup**: Removes shortcuts for deleted accounts
+- **Orphan cleanup**: Automatically removes shortcuts for deleted accounts
 - **Dynamic paths**: Uses current repository location automatically
 - **Custom icons**: Optional `-IconPath` parameter for personalization
+- **Pin to Start**: Optional `-PinToStart` switch to attempt automatic pinning (Windows API limitations may prevent this)
 
 ### Workflow
 1. Add/remove account .reg files in Accounts/

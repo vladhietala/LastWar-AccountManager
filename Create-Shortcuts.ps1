@@ -16,6 +16,10 @@
 .PARAMETER IconPath
     Caminho opcional para um ícone personalizado (.ico)
 
+.PARAMETER PinToStart
+    Tenta fixar os atalhos no Start Menu (Windows 10/11)
+    NOTA: Pode não funcionar devido a restrições do Windows
+
 .EXAMPLE
     .\Create-Shortcuts.ps1
     Cria atalhos para todas as contas descobertas
@@ -24,6 +28,10 @@
     .\Create-Shortcuts.ps1 -IconPath "C:\Icons\game.ico"
     Cria atalhos com ícone personalizado
 
+.EXAMPLE
+    .\Create-Shortcuts.ps1 -PinToStart
+    Cria atalhos e tenta fixá-los no Start Menu
+
 .NOTES
     Autor: Vlad
     Última Atualização: 08/11/2025
@@ -31,7 +39,9 @@
 
 [CmdletBinding()]
 param (
-    [string]$IconPath = $null
+    [string]$IconPath = $null,
+
+    [switch]$PinToStart
 )
 
 # Constantes
@@ -45,13 +55,20 @@ function Get-AccountList {
     <#
     .SYNOPSIS
         Descobre todas as contas disponíveis na pasta Accounts/
+
+    .DESCRIPTION
+        Exclui arquivos template como "Initial.reg" que não são contas reais
     #>
     if (-not (Test-Path $script:ACCOUNTS_FOLDER)) {
         throw "Pasta de contas não encontrada: $script:ACCOUNTS_FOLDER"
     }
 
+    # Templates que devem ser ignorados
+    $excludedTemplates = @("Initial")
+
     $accounts = Get-ChildItem -Path $script:ACCOUNTS_FOLDER -Filter "*.reg" |
                 ForEach-Object { $_.BaseName } |
+                Where-Object { $_ -notin $excludedTemplates } |
                 Sort-Object
 
     if ($accounts.Count -eq 0) {
@@ -59,6 +76,51 @@ function Get-AccountList {
     }
 
     return $accounts
+}
+
+function Set-ShortcutPinToStart {
+    <#
+    .SYNOPSIS
+        Tenta fixar um atalho no Start Menu
+
+    .PARAMETER ShortcutPath
+        Caminho completo do atalho .lnk
+
+    .NOTES
+        No Windows 10/11, a Microsoft bloqueou a API "Pin to Start" programaticamente.
+        Este método usa um workaround via verb "pintostartscreen" que pode não funcionar
+        em todas as versões do Windows.
+    #>
+    param (
+        [Parameter(Mandatory)]
+        [string]$ShortcutPath
+    )
+
+    try {
+        $shell = New-Object -ComObject Shell.Application
+        $folder = Split-Path $ShortcutPath
+        $file = Split-Path $ShortcutPath -Leaf
+
+        $folderObj = $shell.NameSpace($folder)
+        $fileObj = $folderObj.ParseName($file)
+
+        # Procura o verb "Pin to Start"
+        $verb = $fileObj.Verbs() | Where-Object { $_.Name -match 'Fixar|Pin' }
+
+        if ($verb) {
+            $verb.DoIt()
+            Write-Host "    → Atalho fixado no Start Menu" -ForegroundColor Cyan
+            return $true
+        } else {
+            Write-Host "    ⚠ Não foi possível fixar automaticamente (limitação do Windows)" -ForegroundColor Yellow
+            Write-Host "      Fixe manualmente: Clique direito no atalho → 'Fixar no Iniciar'" -ForegroundColor Gray
+            return $false
+        }
+    }
+    catch {
+        Write-Verbose "Erro ao fixar atalho: $_"
+        return $false
+    }
 }
 
 function New-AccountShortcut {
@@ -71,12 +133,17 @@ function New-AccountShortcut {
 
     .PARAMETER IconPath
         Caminho opcional para ícone personalizado
+
+    .PARAMETER PinToStart
+        Se deve tentar fixar o atalho no Start Menu
     #>
     param (
         [Parameter(Mandatory)]
         [string]$AccountName,
 
-        [string]$IconPath = $null
+        [string]$IconPath = $null,
+
+        [bool]$PinToStart = $false
     )
 
     # Cria pasta de atalhos se não existir
@@ -111,6 +178,11 @@ function New-AccountShortcut {
 
         # Libera objeto COM
         [System.Runtime.Interopservices.Marshal]::ReleaseComObject($shell) | Out-Null
+
+        # Tenta fixar no Start Menu se solicitado
+        if ($PinToStart) {
+            Set-ShortcutPinToStart -ShortcutPath $shortcutPath | Out-Null
+        }
 
         return $true
     }
@@ -198,7 +270,7 @@ try {
 
     $successCount = 0
     foreach ($account in $accounts) {
-        if (New-AccountShortcut -AccountName $account -IconPath $IconPath) {
+        if (New-AccountShortcut -AccountName $account -IconPath $IconPath -PinToStart $PinToStart.IsPresent) {
             $successCount++
         }
     }
@@ -217,7 +289,9 @@ try {
     Write-Host "✓ Atalhos criados/atualizados: $successCount de $($accounts.Count)" -ForegroundColor Green
     Write-Host "📁 Local: $script:SHORTCUTS_FOLDER" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "Os atalhos podem ser fixados no Start Menu ou na barra de tarefas." -ForegroundColor Gray
+    if (-not $PinToStart) {
+        Write-Host "💡 Dica: Use o parâmetro -PinToStart para tentar fixar automaticamente no Start Menu" -ForegroundColor Gray
+    }
     Write-Host "Para pesquisar rapidamente, pressione Win e digite o nome da conta." -ForegroundColor Gray
     Write-Host ""
 
