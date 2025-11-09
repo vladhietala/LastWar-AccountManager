@@ -89,9 +89,9 @@ try {
     Assert-NoExistingLock
 
     # Verifica se precisa elevar privilégios (após validações de lock)
-    if (-not (Test-Administrator)) {
+    # if (-not (Test-Administrator)) {
         Request-Elevation -Conta $Conta -MaxBackups $MaxBackups -BoundParameters $PSBoundParameters
-    }
+    # }
 
     # Cria o lock para esta instância
     New-ScriptLock -AccountName $Conta

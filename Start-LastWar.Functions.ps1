@@ -267,8 +267,14 @@ function Build-ElevatedProcessArguments {
         [hashtable]$BoundParameters
     )
 
-    $argList = @(
-        "-NoProfile"
+    $argList = @("-NoProfile")
+
+    # Adiciona -NoExit se Verbose estiver ativo (para manter janela aberta e ver as mensagens)
+    if ($BoundParameters['Verbose']) {
+        $argList += "-NoExit"
+    }
+
+    $argList += @(
         "-ExecutionPolicy", "Bypass"
         "-File", '"{0}"' -f $ScriptPath
         "-Conta", '"{0}"' -f $Conta

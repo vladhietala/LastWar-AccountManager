@@ -34,65 +34,85 @@ Describe "Get-ScriptFullPath" {
 Describe "Build-ElevatedProcessArguments" {
     Context "Argumentos básicos" {
         It "Deve incluir parâmetros obrigatórios" {
-            $args = Build-ElevatedProcessArguments `
+            $argList = Build-ElevatedProcessArguments `
                 -ScriptPath "C:\Test\Script.ps1" `
                 -Conta "TestAccount" `
                 -MaxBackups 10 `
                 -BoundParameters @{}
 
-            $args | Should -Contain "-NoProfile"
-            $args | Should -Contain "-ExecutionPolicy"
-            $args | Should -Contain "Bypass"
+            $argList | Should -Contain "-NoProfile"
+            $argList | Should -Contain "-ExecutionPolicy"
+            $argList | Should -Contain "Bypass"
             # -File vem junto com o caminho: '-File "C:\Test\Script.ps1"'
-            $args | Should -Contain '-File "C:\Test\Script.ps1"'
+            $argList | Should -Contain '-File "C:\Test\Script.ps1"'
             # -Conta vem junto com o valor: '-Conta "TestAccount"'
-            $args | Should -Contain '-Conta "TestAccount"'
-            $args | Should -Contain "-MaxBackups"
-            $args | Should -Contain 10
+            $argList | Should -Contain '-Conta "TestAccount"'
+            $argList | Should -Contain "-MaxBackups"
+            $argList | Should -Contain 10
         }
 
         It "Deve incluir caminho do script com aspas no formato correto" {
-            $args = Build-ElevatedProcessArguments `
+            $argList = Build-ElevatedProcessArguments `
                 -ScriptPath "C:\Test\Script.ps1" `
                 -Conta "TestAccount" `
                 -MaxBackups 10 `
                 -BoundParameters @{}
 
             # A função usa formato -f para criar: '-File "path"'
-            $args | Should -Contain '-File "C:\Test\Script.ps1"'
+            $argList | Should -Contain '-File "C:\Test\Script.ps1"'
         }
 
         It "Deve incluir conta com aspas no formato correto" {
-            $args = Build-ElevatedProcessArguments `
+            $argList = Build-ElevatedProcessArguments `
                 -ScriptPath "C:\Test\Script.ps1" `
                 -Conta "TestAccount" `
                 -MaxBackups 10 `
                 -BoundParameters @{}
 
             # A função usa formato -f para criar: '-Conta "name"'
-            $args | Should -Contain '-Conta "TestAccount"'
+            $argList | Should -Contain '-Conta "TestAccount"'
         }
     }
 
     Context "Com parâmetro Verbose" {
         It "Deve incluir -Verbose quando presente" {
-            $args = Build-ElevatedProcessArguments `
+            $argList = Build-ElevatedProcessArguments `
                 -ScriptPath "C:\Test\Script.ps1" `
                 -Conta "TestAccount" `
                 -MaxBackups 10 `
                 -BoundParameters @{ Verbose = $true }
 
-            $args | Should -Contain "-Verbose"
+            $argList | Should -Contain "-Verbose"
+        }
+
+        It "Deve incluir -NoExit quando Verbose presente (para manter janela aberta)" {
+            $argList = Build-ElevatedProcessArguments `
+                -ScriptPath "C:\Test\Script.ps1" `
+                -Conta "TestAccount" `
+                -MaxBackups 10 `
+                -BoundParameters @{ Verbose = $true }
+
+            $argList | Should -Contain "-NoExit"
         }
 
         It "Não deve incluir -Verbose quando ausente" {
-            $args = Build-ElevatedProcessArguments `
+            $argList = Build-ElevatedProcessArguments `
                 -ScriptPath "C:\Test\Script.ps1" `
                 -Conta "TestAccount" `
                 -MaxBackups 10 `
                 -BoundParameters @{}
 
-            $args | Should -Not -Contain "-Verbose"
+            $argList | Should -Not -Contain "-Verbose"
+        }
+
+        It "Não deve incluir -NoExit quando Verbose ausente" {
+            $argList = Build-ElevatedProcessArguments `
+                -ScriptPath "C:\Test\Script.ps1" `
+                -Conta "TestAccount" `
+                -MaxBackups 10 `
+                -BoundParameters @{}
+
+            $argList | Should -Not -Contain "-NoExit"
         }
     }
 }
