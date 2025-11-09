@@ -87,9 +87,9 @@ function Set-ShortcutPinToStart {
         Caminho completo do atalho .lnk
 
     .NOTES
-        No Windows 10/11, a Microsoft bloqueou a API "Pin to Start" programaticamente.
-        Este método usa um workaround via verb "pintostartscreen" que pode não funcionar
-        em todas as versões do Windows.
+        No Windows 10/11, a Microsoft bloqueou a API "Pin to Start" programaticamente por segurança.
+        A chamada verb.DoIt() retorna E_ACCESSDENIED (0x80070005) mesmo quando o verb existe.
+        A única forma de fixar é manualmente pelo usuário.
     #>
     param (
         [Parameter(Mandatory)]
@@ -104,21 +104,43 @@ function Set-ShortcutPinToStart {
         $folderObj = $shell.NameSpace($folder)
         $fileObj = $folderObj.ParseName($file)
 
-        # Procura o verb "Pin to Start"
-        $verb = $fileObj.Verbs() | Where-Object { $_.Name -match 'Fixar|Pin' }
-
-        if ($verb) {
-            $verb.DoIt()
-            Write-Host "    → Atalho fixado no Start Menu" -ForegroundColor Cyan
+        # Verifica se o atalho já está pinado
+        $unpinVerb = $fileObj.Verbs() | Where-Object { $_.Name -match 'Unpin|Desafixar' }
+        if ($unpinVerb) {
+            Write-Host "    ✓ Atalho já está fixado no Start Menu" -ForegroundColor Green
             return $true
-        } else {
-            Write-Host "    ⚠ Não foi possível fixar automaticamente (limitação do Windows)" -ForegroundColor Yellow
-            Write-Host "      Fixe manualmente: Clique direito no atalho → 'Fixar no Iniciar'" -ForegroundColor Gray
-            return $false
         }
+
+        # Procura o verb "Pin to Start"
+        $pinVerb = $fileObj.Verbs() | Where-Object { $_.Name -match '&Pin to Start|&Fixar no Iniciar' }
+
+        if ($pinVerb) {
+            try {
+                $pinVerb.DoIt()
+                Write-Host "    → Tentativa de fixar realizada" -ForegroundColor Cyan
+                Start-Sleep -Milliseconds 500
+
+                # Verifica se realmente fixou
+                $fileObj = $folderObj.ParseName($file)
+                $unpinCheck = $fileObj.Verbs() | Where-Object { $_.Name -match 'Unpin|Desafixar' }
+                if ($unpinCheck) {
+                    Write-Host "    ✓ Atalho fixado com sucesso!" -ForegroundColor Green
+                    return $true
+                }
+            }
+            catch {
+                # Erro esperado: E_ACCESSDENIED (0x80070005)
+                Write-Verbose "Erro ao fixar: $_"
+            }
+        }
+
+        # Se chegou aqui, não conseguiu fixar automaticamente
+        Write-Host "    ⚠ Windows bloqueou fixação automática (segurança do sistema)" -ForegroundColor Yellow
+        Write-Host "      → Para fixar: Pressione Win, digite '$($file.Replace('.lnk',''))', clique direito → 'Fixar no Iniciar'" -ForegroundColor Gray
+        return $false
     }
     catch {
-        Write-Verbose "Erro ao fixar atalho: $_"
+        Write-Verbose "Erro ao acessar atalho: $_"
         return $false
     }
 }
