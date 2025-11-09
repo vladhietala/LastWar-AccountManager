@@ -33,7 +33,8 @@
 [CmdletBinding()]
 param (
     [string]$Conta = 'Vlad',
-    [int]$MaxBackups = 10
+    [int]$MaxBackups = 10,
+    [switch]$CreateNew
 )
 
 # Caminho completo do script principal (deve ser definido ANTES do dot-sourcing para elevação de privilégios)
@@ -54,11 +55,23 @@ function Get-AvailableAccounts {
 # Validação da conta (dinâmica, executada após o parsing dos parâmetros)
 $availableAccounts = Get-AvailableAccounts
 $matched = $availableAccounts | Where-Object { $_.Equals($Conta, 'InvariantCultureIgnoreCase') } | Select-Object -First 1
-if (-not $matched) {
-    throw "Conta '$Conta' inválida. Contas disponíveis: $($availableAccounts -join ', ')"
+
+if ($CreateNew) {
+    # Modo criação: conta NÃO deve existir
+    if ($matched) {
+        throw "Conta '{0}' já existe. Use sem -CreateNew para carregá-la, ou escolha outro nome." -f $Conta
+    }
+    # Mantém o nome fornecido pelo usuário (não há matched para normalizar)
+    Write-Host ("Modo de criação: Nova conta '{0}' será criada" -f $Conta) -ForegroundColor Cyan
 }
-# Normaliza casing para o nome do arquivo
-$Conta = $matched
+else {
+    # Modo normal: conta DEVE existir
+    if (-not $matched) {
+        throw "Conta '{0}' inválida. Contas disponíveis: {1}`nPara criar nova conta, use: -CreateNew" -f $Conta, ($availableAccounts -join ', ')
+    }
+    # Normaliza casing para o nome do arquivo
+    $Conta = $matched
+}
 
 # Constantes (sobrescreve valores padrão de Functions.ps1 com valores de produção)
 $script:REGISTRY_PATH = "HKEY_CURRENT_USER\Software\FirstFun\Last War-Survival Game"
@@ -100,7 +113,7 @@ try {
     New-ScriptLock -AccountName $Conta
 
     try {
-        Invoke-AccountSwitch -Conta $Conta -MaxBackups $MaxBackups
+        Invoke-AccountSwitch -Conta $Conta -MaxBackups $MaxBackups -IsNewAccount $CreateNew
     }
     catch {
         # Captura erro dentro do try interno, mas ainda remove o lock no finally

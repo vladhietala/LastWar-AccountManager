@@ -294,6 +294,10 @@ function Build-ElevatedProcessArguments {
         "-MaxBackups", $MaxBackups
     )
 
+    if ($BoundParameters['CreateNew']) {
+        $argList += "-CreateNew"
+    }
+
     if ($BoundParameters['Verbose']) {
         $argList += "-Verbose"
     }
@@ -369,14 +373,76 @@ function Request-Elevation {
     }
 }
 
-function Initialize-Workspace {
+function Initialize-NewAccount {
+    <#
+    .SYNOPSIS
+        Inicializa uma nova conta que ainda não existe
+
+    .DESCRIPTION
+        Verifica se há arquivo Initial.reg para usar como template.
+        Se existir, copia para a nova conta.
+        Se não existir, retorna $null (indicando que import deve ser pulado).
+
+    .PARAMETER Conta
+        Nome da nova conta a ser criada
+
+    .OUTPUTS
+        Caminho do arquivo .reg criado, ou $null se deve pular import
+    #>
     param (
         [string]$Conta
     )
 
-    $regFilePath = Join-Path -Path $script:REGEDIT_ROOT -ChildPath "Accounts" -AdditionalChildPath "$Conta.reg"
+    $accountsPath = Join-Path -Path $script:REGEDIT_ROOT -ChildPath "Accounts"
+    $accountFile = Join-Path -Path $accountsPath -ChildPath ("{0}.reg" -f $Conta)
+
+    # Verifica se conta já existe (segurança adicional)
+    if (Test-Path $accountFile) {
+        throw "Conta '{0}' já existe em: {1}" -f $Conta, $accountFile
+    }
+
+    # Verifica se existe Initial.reg como template
+    $initialFile = Join-Path -Path $accountsPath -ChildPath "Initial.reg"
+
+    if (Test-Path $initialFile) {
+        Write-Host ("Usando Initial.reg como base para nova conta '{0}'" -f $Conta) -ForegroundColor Cyan
+        Copy-Item $initialFile $accountFile -Force
+        Write-Verbose ("Template copiado: {0} -> {1}" -f $initialFile, $accountFile)
+        return $accountFile
+    }
+    else {
+        Write-Warning "Initial.reg não encontrado. Conta será criada do zero."
+        Write-Host ("Configure a nova conta '{0}' dentro do jogo. Ao sair, as configurações serão salvas em '{1}'" -f $Conta, $accountFile) -ForegroundColor Yellow
+        return $null  # Sinaliza para pular import
+    }
+}
+
+function Initialize-Workspace {
+    <#
+    .SYNOPSIS
+        Inicializa o workspace e valida arquivo de conta existente
+
+    .PARAMETER Conta
+        Nome da conta a ser carregada
+
+    .PARAMETER IsNewAccount
+        Se $true, trata como criação de nova conta
+
+    .OUTPUTS
+        Caminho do arquivo .reg, ou $null se deve pular import (apenas para contas novas)
+    #>
+    param (
+        [string]$Conta,
+        [bool]$IsNewAccount = $false
+    )
+
+    if ($IsNewAccount) {
+        return Initialize-NewAccount -Conta $Conta
+    }
+
+    $regFilePath = Join-Path -Path $script:REGEDIT_ROOT -ChildPath "Accounts" -AdditionalChildPath ("{0}.reg" -f $Conta)
     if (-not (Test-Path $regFilePath)) {
-        throw "Arquivo de registro não encontrado: $regFilePath"
+        throw "Arquivo de registro não encontrado: {0}" -f $regFilePath
     }
 
     return $regFilePath
@@ -652,8 +718,8 @@ function Invoke-AccountSwitch {
     .DESCRIPTION
         Executa o fluxo completo para trocar de conta:
         1. Inicializa workspace e valida arquivo da conta
-        2. Cria backup do estado atual da conta
-        3. Importa configurações de registro da conta
+        2. Cria backup do estado atual da conta (se aplicável)
+        3. Importa configurações de registro da conta (se houver)
         4. Inicia o jogo e aguarda finalização
         5. Exporta configurações de registro atualizadas
 
@@ -662,26 +728,39 @@ function Invoke-AccountSwitch {
 
     .PARAMETER MaxBackups
         Número máximo de backups a manter por conta
+
+    .PARAMETER IsNewAccount
+        Se $true, trata como criação de nova conta
     #>
     param(
         [Parameter(Mandatory)]
         [string]$Conta,
 
         [Parameter(Mandatory)]
-        [int]$MaxBackups
+        [int]$MaxBackups,
+
+        [bool]$IsNewAccount = $false
     )
 
     # Inicializa e verifica o ambiente
-    $regFilePath = Initialize-Workspace -Conta $Conta
-    Write-Host ("Carregando conta {0} a partir de: {1}" -f $Conta, $regFilePath)
+    $regFilePath = Initialize-Workspace -Conta $Conta -IsNewAccount $IsNewAccount
 
-    # Cria backup das configurações atuais
-    New-RegistryBackup -Path $script:REGEDIT_ROOT -Conta $Conta -SourceFile $regFilePath -MaxBackups $MaxBackups
+    if ($regFilePath) {
+        Write-Host ("Carregando conta {0} a partir de: {1}" -f $Conta, $regFilePath)
 
-    # Importa as configurações da conta
-    Import-GameRegistry -RegFilePath $regFilePath
+        # Cria backup das configurações atuais
+        New-RegistryBackup -Path $script:REGEDIT_ROOT -Conta $Conta -SourceFile $regFilePath -MaxBackups $MaxBackups
 
-    Start-Sleep -Seconds $script:POST_IMPORT_DELAY_SECONDS
+        # Importa as configurações da conta
+        Import-GameRegistry -RegFilePath $regFilePath
+
+        Start-Sleep -Seconds $script:POST_IMPORT_DELAY_SECONDS
+    }
+    else {
+        Write-Host ("Criando nova conta '{0}' sem template. O jogo será iniciado com configurações atuais." -f $Conta) -ForegroundColor Yellow
+        # Define caminho onde será salvo ao exportar
+        $regFilePath = Join-Path -Path $script:REGEDIT_ROOT -ChildPath "Accounts" -AdditionalChildPath ("{0}.reg" -f $Conta)
+    }
 
     # Inicia o jogo e aguarda finalizar
     Start-GameProcess
