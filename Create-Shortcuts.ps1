@@ -38,7 +38,7 @@ param (
 $script:REPO_PATH = $PSScriptRoot
 $script:LAUNCH_SCRIPT = Join-Path -Path $script:REPO_PATH -ChildPath "Launch-LastWar.ps1"
 $script:PWSH_PATH = "C:\Program Files\PowerShell\7\pwsh.exe"
-$script:SHORTCUTS_FOLDER = "C:\Users\vladh\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\FirstFun"
+$script:SHORTCUTS_FOLDER = Join-Path -Path $env:APPDATA -ChildPath "Microsoft\Windows\Start Menu\Programs\FirstFun"
 $script:ACCOUNTS_FOLDER = Join-Path -Path $script:REPO_PATH -ChildPath "Accounts"
 
 function Get-AccountList {

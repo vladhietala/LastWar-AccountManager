@@ -53,7 +53,7 @@ The system follows this sequence when switching accounts:
 3. **Initialization**: Validates account name exists in Accounts/ folder
 4. **Backup**: Creates timestamped backup in Backups/{AccountName}/ (only if different from last backup based on SHA256 hash)
 5. **Import**: Loads account .reg file into Windows Registry using `reg import`
-6. **Launch**: Starts game via `C:\Users\vladh\AppData\Local\TheLastWar\Launch.exe`
+6. **Launch**: Starts game via `%LOCALAPPDATA%\TheLastWar\Launch.exe`
 7. **Monitor**: Waits for game process (searches for *LastWar.exe*, timeout 30s)
 8. **Await Exit**: Blocks until game process terminates
 9. **Grace Period**: Waits 1 second for registry write operations to complete
@@ -86,7 +86,7 @@ Registry files are Unicode-encoded Windows Registry Editor Version 5.00 format c
 ```powershell
 .\Compare-LastWarKeys.ps1 -KeyPath1 "HKCU:\Software\FirstFun\LastWar-Account1" `
                           -KeyPath2 "HKCU:\Software\FirstFun\LastWar-Account2" `
-                          -OutRegFile "C:\Backups\Diff.reg"
+                          -OutRegFile ".\Diff.reg"
 ```
 
 ### Creating/updating Start Menu shortcuts
@@ -109,12 +109,14 @@ Use VSCode's PowerShell debugging (F5) or run with `-Verbose` flag:
 
 ## Important Constants
 
-- **Repository Location**: `D:\source\repos\LastWar-AccountManager\`
+- **Repository Location**: Detected automatically via `$PSScriptRoot`
 - **Registry Path**: `HKEY_CURRENT_USER\Software\FirstFun\Last War-Survival Game`
-- **Game Launcher**: `C:\Users\vladh\AppData\Local\TheLastWar\Launch.exe`
-- **Game Root**: `C:\Users\vladh\AppData\Local\TheLastWar`
+- **Game Launcher**: `%LOCALAPPDATA%\TheLastWar\Launch.exe`
+- **Game Root**: `%LOCALAPPDATA%\TheLastWar`
+- **Shortcuts Location**: `%APPDATA%\Microsoft\Windows\Start Menu\Programs\FirstFun\`
+- **Lock File**: `.lastwar.lock` (in repository root)
 - **Default Max Backups**: 10 per account
-- **GitHub Repository**: `git@github.com:vladhietala/LastWar-AccountManager.git` (private, uses SSH)
+- **GitHub Repository**: Private repository (uses SSH)
 
 ## Script Requirements
 
