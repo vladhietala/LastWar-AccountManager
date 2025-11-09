@@ -90,6 +90,12 @@ function Set-ShortcutPinToStart {
         No Windows 10/11, a Microsoft bloqueou a API "Pin to Start" programaticamente por segurança.
         A chamada verb.DoIt() retorna E_ACCESSDENIED (0x80070005) mesmo quando o verb existe.
         A única forma de fixar é manualmente pelo usuário.
+
+        Nota sobre idiomas:
+        - Os nomes dos verbs dependem do idioma do Windows
+        - O caractere & indica o atalho de teclado (ex: "Unpi&n from Start")
+        - A função remove o & antes de fazer a comparação
+        - Suporta EN-US ("Pin to Start") e PT-BR ("Fixar no Iniciar")
     #>
     param (
         [Parameter(Mandatory)]
@@ -105,14 +111,20 @@ function Set-ShortcutPinToStart {
         $fileObj = $folderObj.ParseName($file)
 
         # Verifica se o atalho já está pinado
-        $unpinVerb = $fileObj.Verbs() | Where-Object { $_.Name -match 'Unpin|Desafixar' }
+        # Nota: & é usado para atalhos de teclado (ex: "Unpi&n from Start")
+        $unpinVerb = $fileObj.Verbs() | Where-Object {
+            $_.Name -replace '&', '' -match 'Unpin from Start|Desafixar do Iniciar|Unpin from taskbar'
+        }
         if ($unpinVerb) {
             Write-Host "    ✓ Atalho já está fixado no Start Menu" -ForegroundColor Green
             return $true
         }
 
         # Procura o verb "Pin to Start"
-        $pinVerb = $fileObj.Verbs() | Where-Object { $_.Name -match '&Pin to Start|&Fixar no Iniciar' }
+        # Remove & para comparação mais confiável entre idiomas
+        $pinVerb = $fileObj.Verbs() | Where-Object {
+            $_.Name -replace '&', '' -match 'Pin to Start|Fixar no Iniciar'
+        }
 
         if ($pinVerb) {
             try {
@@ -122,7 +134,9 @@ function Set-ShortcutPinToStart {
 
                 # Verifica se realmente fixou
                 $fileObj = $folderObj.ParseName($file)
-                $unpinCheck = $fileObj.Verbs() | Where-Object { $_.Name -match 'Unpin|Desafixar' }
+                $unpinCheck = $fileObj.Verbs() | Where-Object {
+                    $_.Name -replace '&', '' -match 'Unpin from Start|Desafixar do Iniciar'
+                }
                 if ($unpinCheck) {
                     Write-Host "    ✓ Atalho fixado com sucesso!" -ForegroundColor Green
                     return $true
