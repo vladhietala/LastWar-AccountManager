@@ -95,7 +95,7 @@ Use VSCode's PowerShell debugging (F5) or run with `-Verbose` flag:
 - **Game Launcher**: `C:\Users\vladh\AppData\Local\TheLastWar\Launch.exe`
 - **Game Root**: `C:\Users\vladh\AppData\Local\TheLastWar`
 - **Default Max Backups**: 10 per account
-- **GitHub Repository**: `https://github.com/vladhietala/LastWar-AccountManager.git` (private)
+- **GitHub Repository**: `git@github.com:vladhietala/LastWar-AccountManager.git` (private, uses SSH)
 
 ## Script Requirements
 
