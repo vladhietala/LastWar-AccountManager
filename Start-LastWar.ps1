@@ -477,7 +477,7 @@ try {
     # Verifica se já existe outra instância em execução
     $existingLock = Test-ScriptLock
     if ($existingLock) {
-        $lockTime = [DateTime]::Parse($existingLock.LockTime)
+        $lockTime = [DateTime]::ParseExact($existingLock.LockTime, "o", [System.Globalization.CultureInfo]::InvariantCulture)
         $duration = (Get-Date) - $lockTime
         Write-Host ""
         Write-Host "================================================" -ForegroundColor Red
