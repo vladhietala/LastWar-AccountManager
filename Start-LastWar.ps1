@@ -103,11 +103,15 @@ function Test-ScriptLock {
         Verifica se existe outra instância do script em execução
 
     .DESCRIPTION
-        Verifica a existência de um arquivo de lock e valida se o processo associado ainda está ativo
+        Verifica a existência de um arquivo de lock e valida se o processo associado ainda está ativo.
+        Esta função apenas lê o estado do lock sem modificá-lo.
 
     .OUTPUTS
-        Retorna um objeto com IsLocked, AccountName, ProcessId, LockTime se houver lock ativo
-        Retorna $null se não houver lock ou se o processo já finalizou
+        Retorna um objeto com informações do lock incluindo:
+        - IsLocked: Se há um processo ativo
+        - IsOrphaned: Se o lock existe mas o processo não
+        - IsCorrupted: Se o arquivo está corrompido
+        - AccountName, ProcessId, LockTime: Dados do lock (quando disponíveis)
     #>
     if (-not (Test-Path $script:LOCK_FILE)) {
         return $null
@@ -118,23 +122,51 @@ function Test-ScriptLock {
 
         # Verifica se o processo ainda está ativo
         $process = Get-Process -Id $lockContent.ProcessId -ErrorAction SilentlyContinue
-        if ($process) {
-            return [PSCustomObject]@{
-                IsLocked = $true
-                AccountName = $lockContent.AccountName
-                ProcessId = $lockContent.ProcessId
-                LockTime = $lockContent.LockTime
-            }
-        } else {
-            # Processo não existe mais, remove lock órfão
-            Remove-Item $script:LOCK_FILE -Force -ErrorAction SilentlyContinue
-            return $null
+
+        return [PSCustomObject]@{
+            IsLocked = ($null -ne $process)
+            IsOrphaned = ($null -eq $process)
+            IsCorrupted = $false
+            AccountName = $lockContent.AccountName
+            ProcessId = $lockContent.ProcessId
+            LockTime = $lockContent.LockTime
         }
     }
     catch {
-        # Lock file corrompido ou ilegível, remove
-        Remove-Item $script:LOCK_FILE -Force -ErrorAction SilentlyContinue
-        return $null
+        # Lock file corrompido ou ilegível
+        return [PSCustomObject]@{
+            IsLocked = $false
+            IsOrphaned = $false
+            IsCorrupted = $true
+            AccountName = $null
+            ProcessId = $null
+            LockTime = $null
+        }
+    }
+}
+
+function Remove-OrphanedLock {
+    <#
+    .SYNOPSIS
+        Remove arquivo de lock órfão se o processo associado não existir mais
+
+    .DESCRIPTION
+        Verifica o estado do lock e remove se estiver órfão ou corrompido
+    #>
+    $lockState = Test-ScriptLock
+
+    if ($lockState -and ($lockState.IsOrphaned -or $lockState.IsCorrupted)) {
+        try {
+            Remove-Item $script:LOCK_FILE -Force -ErrorAction SilentlyContinue
+            if ($lockState.IsOrphaned) {
+                Write-Verbose "Lock órfão removido (PID: $($lockState.ProcessId))"
+            } elseif ($lockState.IsCorrupted) {
+                Write-Verbose "Lock corrompido removido"
+            }
+        }
+        catch {
+            Write-Warning "Não foi possível remover lock órfão: $_"
+        }
     }
 }
 
@@ -230,6 +262,78 @@ function Show-ErrorMessage {
     }
 }
 
+function Get-ScriptFullPath {
+    <#
+    .SYNOPSIS
+        Obtém o caminho completo do script atual com fallbacks
+
+    .DESCRIPTION
+        Tenta múltiplas estratégias para obter o caminho do script,
+        garantindo compatibilidade em diferentes contextos de execução
+    #>
+    if ($PSCommandPath) {
+        return $PSCommandPath
+    } elseif ($MyInvocation.MyCommand.Path) {
+        return $MyInvocation.MyCommand.Path
+    } else {
+        return Join-Path -Path $script:REGEDIT_ROOT -ChildPath "Start-LastWar.ps1"
+    }
+}
+
+function Build-ElevatedProcessArguments {
+    <#
+    .SYNOPSIS
+        Constrói a lista de argumentos para o processo elevado
+
+    .PARAMETER ScriptPath
+        Caminho completo do script a ser executado
+
+    .PARAMETER Conta
+        Nome da conta
+
+    .PARAMETER MaxBackups
+        Número máximo de backups
+
+    .PARAMETER BoundParameters
+        Parâmetros bound do cmdlet original
+    #>
+    param(
+        [string]$ScriptPath,
+        [string]$Conta,
+        [int]$MaxBackups,
+        [hashtable]$BoundParameters
+    )
+
+    $argList = @(
+        "-NoProfile"
+        "-ExecutionPolicy", "Bypass"
+        "-File", '"{0}"' -f $ScriptPath
+        "-Conta", '"{0}"' -f $Conta
+        "-MaxBackups", $MaxBackups
+    )
+
+    if ($BoundParameters['Verbose']) {
+        $argList += "-Verbose"
+    }
+
+    return $argList
+}
+
+function Show-ElevationPrompt {
+    <#
+    .SYNOPSIS
+        Exibe mensagem informativa sobre a elevação de privilégios
+    #>
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Yellow
+    Write-Host "  Elevação de Privilégios Necessária" -ForegroundColor Yellow
+    Write-Host "========================================" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "O jogo requer permissões de administrador." -ForegroundColor Cyan
+    Write-Host "Solicitando elevação..." -ForegroundColor Cyan
+    Write-Host ""
+}
+
 function Request-Elevation {
     <#
     .SYNOPSIS
@@ -240,6 +344,9 @@ function Request-Elevation {
 
     .PARAMETER MaxBackups
         Número máximo de backups
+
+    .PARAMETER BoundParameters
+        Parâmetros bound do cmdlet original
     #>
     param (
         [string]$Conta,
@@ -247,51 +354,23 @@ function Request-Elevation {
         [hashtable]$BoundParameters
     )
 
-    Write-Host ""
-    Write-Host "========================================" -ForegroundColor Yellow
-    Write-Host "  Elevação de Privilégios Necessária" -ForegroundColor Yellow
-    Write-Host "========================================" -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "O jogo requer permissões de administrador." -ForegroundColor Cyan
-    Write-Host "Solicitando elevação..." -ForegroundColor Cyan
-    Write-Host ""
+    Show-ElevationPrompt
 
     try {
-        # Obtém o caminho completo do script atual
-        $scriptFullPath = if ($PSCommandPath) {
-            $PSCommandPath
-        } elseif ($MyInvocation.MyCommand.Path) {
-            $MyInvocation.MyCommand.Path
-        } else {
-            Join-Path -Path $script:REGEDIT_ROOT -ChildPath "Start-LastWar.ps1"
-        }
-
+        $scriptFullPath = Get-ScriptFullPath
         Write-Verbose "Caminho do script para elevação: $scriptFullPath"
 
-        # Reconstrói os argumentos para passar ao processo elevado
-        $argList = @(
-            "-NoProfile"
-            "-ExecutionPolicy", "Bypass"
-            "-File", "`"$scriptFullPath`""
-            "-Conta", "`"$Conta`""
-            "-MaxBackups", $MaxBackups
-        )
-
-        # Adiciona -Verbose se estiver ativo
-        if ($BoundParameters['Verbose']) {
-            $argList += "-Verbose"
-        }
+        $argList = Build-ElevatedProcessArguments `
+            -ScriptPath $scriptFullPath `
+            -Conta $Conta `
+            -MaxBackups $MaxBackups `
+            -BoundParameters $BoundParameters
 
         Write-Verbose "Argumentos para processo elevado: $($argList -join ' ')"
 
-        # Inicia processo elevado
-        # Nota: -Wait não funciona perfeitamente com -Verb RunAs
-        # O processo elevado deve gerenciar sua própria vida útil
         $process = Start-Process -FilePath "pwsh.exe" -ArgumentList $argList -Verb RunAs -PassThru
-
         Write-Verbose "Processo elevado iniciado com PID: $($process.Id)"
 
-        # Sai do processo não-elevado
         exit 0
     }
     catch {
@@ -321,52 +400,130 @@ function Initialize-Workspace {
     return $regFilePath
 }
 
+function Test-BackupNeeded {
+    <#
+    .SYNOPSIS
+        Verifica se um novo backup é necessário comparando com o mais recente
+
+    .PARAMETER SourceFile
+        Arquivo fonte a ser verificado
+
+    .PARAMETER BackupFolder
+        Pasta onde estão os backups
+
+    .PARAMETER Conta
+        Nome da conta para filtrar backups
+
+    .OUTPUTS
+        $true se backup é necessário, $false se arquivo é idêntico ao último backup
+    #>
+    param(
+        [string]$SourceFile,
+        [string]$BackupFolder,
+        [string]$Conta
+    )
+
+    $latestBackup = Get-ChildItem -Path $BackupFolder -Filter "Backup_${Conta}_*.reg" -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1
+
+    if (-not $latestBackup) {
+        return $true
+    }
+
+    try {
+        $hashSource = Get-FileHash -Path $SourceFile -Algorithm SHA256
+        $hashLatest = Get-FileHash -Path $latestBackup.FullName -Algorithm SHA256
+
+        if ($hashSource.Hash -eq $hashLatest.Hash) {
+            Write-Host ("Arquivo atual é idêntico ao backup mais recente ({0}). Pulando criação de backup." -f $latestBackup.Name)
+            return $false
+        }
+
+        return $true
+    }
+    catch {
+        Write-Warning "Não foi possível comparar hashes dos arquivos: $_"
+        return $true  # Em caso de erro, cria o backup por segurança
+    }
+}
+
+function Remove-OldBackups {
+    <#
+    .SYNOPSIS
+        Remove backups antigos mantendo apenas os N mais recentes
+
+    .PARAMETER BackupFolder
+        Pasta onde estão os backups
+
+    .PARAMETER Conta
+        Nome da conta para filtrar backups
+
+    .PARAMETER MaxBackups
+        Número máximo de backups a manter
+    #>
+    param(
+        [string]$BackupFolder,
+        [string]$Conta,
+        [int]$MaxBackups
+    )
+
+    $oldBackups = Get-ChildItem -Path $BackupFolder -Filter "Backup_${Conta}_*.reg" |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -Skip $MaxBackups
+
+    if ($oldBackups) {
+        $oldBackups | Remove-Item -Force
+        Write-Verbose ("Removidos {0} backups antigos" -f $oldBackups.Count)
+    }
+}
+
 function New-RegistryBackup {
+    <#
+    .SYNOPSIS
+        Cria backup do arquivo de registro da conta
+
+    .PARAMETER Path
+        Caminho base onde criar a pasta de backups
+
+    .PARAMETER Conta
+        Nome da conta
+
+    .PARAMETER SourceFile
+        Arquivo fonte a ser copiado
+
+    .PARAMETER MaxBackups
+        Número máximo de backups a manter
+    #>
     param (
         [string]$Path,
         [string]$Conta,
         [string]$SourceFile,
         [int]$MaxBackups
     )
+
     # Cria pasta de backup
     $backupFolder = Join-Path -Path $Path -ChildPath "Backups" -AdditionalChildPath $Conta
     if (-not (Test-Path $backupFolder)) {
         New-Item -ItemType Directory -Path $backupFolder -Force | Out-Null
     }
 
+    # Verifica se backup é necessário
+    if (-not (Test-BackupNeeded -SourceFile $SourceFile -BackupFolder $backupFolder -Conta $Conta)) {
+        return
+    }
+
     # Cria backup com timestamp
     $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
     $backupPath = Join-Path -Path $backupFolder -ChildPath "Backup_${Conta}_${timestamp}.reg"
-    Write-Host "Fazendo backup do arquivo atual em: $backupPath"
-
-    # Se já existir backups, compara o arquivo atual com o backup mais recente
-    $latestBackup = Get-ChildItem -Path $backupFolder -Filter "Backup_${Conta}_*.reg" -ErrorAction SilentlyContinue |
-    Sort-Object LastWriteTime -Descending | Select-Object -First 1
-
-    if ($latestBackup) {
-        try {
-            $hashSource = Get-FileHash -Path $SourceFile -Algorithm SHA256
-            $hashLatest = Get-FileHash -Path $latestBackup.FullName -Algorithm SHA256
-            if ($hashSource.Hash -eq $hashLatest.Hash) {
-                Write-Host "Arquivo atual é idêntico ao backup mais recente ($($latestBackup.Name)). Pulando criação de backup."
-                return
-            }
-        }
-        catch {
-            Write-Warning "Não foi possível comparar hashes dos arquivos: $_"
-            # Não aborta; segue tentando criar o backup
-        }
-    }
 
     try {
+        Write-Host "Fazendo backup do arquivo atual em: $backupPath"
         Copy-Item -Path $SourceFile -Destination $backupPath -Force
         Write-Host "Backup realizado com sucesso"
 
-        # Mantém apenas os $MaxBackups backups mais recentes
-        Get-ChildItem -Path $backupFolder -Filter "Backup_${Conta}_*.reg" |
-        Sort-Object LastWriteTime -Descending |
-        Select-Object -Skip $MaxBackups |
-        Remove-Item -Force
+        # Remove backups antigos
+        Remove-OldBackups -BackupFolder $backupFolder -Conta $Conta -MaxBackups $MaxBackups
     }
     catch {
         Write-Warning "Não foi possível fazer o backup: $_"
@@ -429,7 +586,7 @@ function Find-GameProcess {
         $gameProcess = Get-Process -Name "*LastWar*" -ErrorAction SilentlyContinue | Select-Object -First 1
 
         if ($gameProcess) {
-            Write-Host "Processo do jogo encontrado: $($gameProcess.Path)"
+            Write-Host ("Processo do jogo encontrado: {0}" -f $gameProcess.Path)
             return $gameProcess
         }
 
@@ -474,20 +631,28 @@ try {
     # Valida instalação do jogo
     Test-GameInstallation
 
+    # Remove locks órfãos antes de verificar
+    Remove-OrphanedLock
+
     # Verifica se já existe outra instância em execução
     $existingLock = Test-ScriptLock
-    if ($existingLock) {
-        $lockTime = [DateTime]::ParseExact($existingLock.LockTime, "o", [System.Globalization.CultureInfo]::InvariantCulture)
+    if ($existingLock -and $existingLock.IsLocked) {
+        # ConvertFrom-Json já deserializa ISO 8601 para DateTime
+        $lockTime = if ($existingLock.LockTime -is [DateTime]) {
+            $existingLock.LockTime
+        } else {
+            [DateTime]::ParseExact($existingLock.LockTime, "o", [System.Globalization.CultureInfo]::InvariantCulture)
+        }
         $duration = (Get-Date) - $lockTime
         Write-Host ""
         Write-Host "================================================" -ForegroundColor Red
         Write-Host "ERRO: Outra instância do script já está em execução!" -ForegroundColor Red
         Write-Host "================================================" -ForegroundColor Red
         Write-Host ""
-        Write-Host "Conta em execução: $($existingLock.AccountName)" -ForegroundColor Yellow
-        Write-Host "Process ID: $($existingLock.ProcessId)" -ForegroundColor Yellow
-        Write-Host "Iniciado em: $($lockTime.ToString('dd/MM/yyyy HH:mm:ss'))" -ForegroundColor Yellow
-        Write-Host "Tempo decorrido: $([Math]::Floor($duration.TotalMinutes)) minutos e $($duration.Seconds) segundos" -ForegroundColor Yellow
+        Write-Host ("Conta em execução: {0}" -f $existingLock.AccountName) -ForegroundColor Yellow
+        Write-Host ("Process ID: {0}" -f $existingLock.ProcessId) -ForegroundColor Yellow
+        Write-Host ("Iniciado em: {0}" -f $lockTime.ToString('dd/MM/yyyy HH:mm:ss')) -ForegroundColor Yellow
+        Write-Host ("Tempo decorrido: {0} minutos e {1} segundos" -f [Math]::Floor($duration.TotalMinutes), $duration.Seconds) -ForegroundColor Yellow
         Write-Host ""
         Write-Host "Aguarde a outra instância finalizar antes de iniciar uma nova." -ForegroundColor Cyan
         Write-Host "Isso previne que o Export-GameRegistry de uma conta sobrescreva" -ForegroundColor Cyan
