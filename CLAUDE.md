@@ -57,13 +57,14 @@ The system follows this sequence when switching accounts:
 2. **Lock Creation**: Creates lock file in repository root (`.lastwar.lock`) with account name, PID, and timestamp
 3. **Initialization**: Validates account name exists in Accounts/ folder
 4. **Backup**: Creates timestamped backup in Backups/{AccountName}/ (only if different from last backup based on SHA256 hash)
-5. **Import**: Loads account .reg file into Windows Registry using `reg import`
-6. **Launch**: Starts game via `%LOCALAPPDATA%\TheLastWar\Launch.exe`
-7. **Monitor**: Waits for game process (searches for *LastWar.exe*, timeout 30s)
-8. **Await Exit**: Blocks until game process terminates
-9. **Grace Period**: Waits 1 second for registry write operations to complete
-10. **Export**: Saves current registry state back to account .reg file using `reg export`
-11. **Lock Release**: Removes lock file (guaranteed via try-finally block)
+5. **Registry Cleanup**: Deletes existing registry key using `reg delete` to prevent value accumulation
+6. **Import**: Loads account .reg file into Windows Registry using `reg import`
+7. **Launch**: Starts game via `%LOCALAPPDATA%\TheLastWar\Launch.exe`
+8. **Monitor**: Waits for game process (searches for LastWar.exe, timeout 90s)
+9. **Await Exit**: Blocks until game process terminates
+10. **Grace Period**: Waits 1 second for registry write operations to complete
+11. **Export**: Saves current registry state back to account .reg file using `reg export`
+12. **Lock Release**: Removes lock file (guaranteed via try-finally block)
 
 ### Registry File Format
 
@@ -130,6 +131,50 @@ Use VSCode's PowerShell debugging (F5) or run with `-Verbose` flag:
 - Windows Registry access (uses `reg.exe` commands)
 - Write permissions to script directory for backups
 - **Administrator privileges**: The script automatically elevates itself when needed (auto-elevation)
+
+## PowerShell Coding Conventions
+
+When working with PowerShell code in this repository, follow these guidelines:
+
+### String Formatting
+- **Prefer `-f` format operator for complex string construction** instead of string interpolation
+- Use `-f` when combining multiple variables or expressions to improve readability
+- Simple interpolation with `"$variable"` is acceptable for single variables
+
+**Good examples (complex):**
+```powershell
+$errorMessage = "reg {0} retornou erro (código {1}): {2}" -f $Operation, $LASTEXITCODE, $result
+Write-Host ("Processo encontrado: {0} (PID: {1})" -f $process.Name, $process.Id)
+```
+
+**Acceptable (simple):**
+```powershell
+Write-Host "Usando conta: $Conta"
+```
+
+### Path Construction
+- **Always use `Join-Path`** instead of string concatenation for file paths
+- Ensures correct path separators across different scenarios
+- Use `-AdditionalChildPath` for joining multiple path segments
+
+**Good examples:**
+```powershell
+$accountsPath = Join-Path -Path $repoRoot -ChildPath "Accounts"
+$backupPath = Join-Path -Path $backupFolder -ChildPath "Backup_${Conta}_${timestamp}.reg"
+$deepPath = Join-Path -Path $base -ChildPath "Level1" -AdditionalChildPath "Level2", "file.txt"
+```
+
+**Avoid:**
+```powershell
+$accountsPath = "$repoRoot\Accounts"  # Bad: hardcoded separator
+$accountsPath = "$repoRoot/Accounts"  # Bad: wrong separator for Windows
+```
+
+### Other Conventions
+- Use `Write-Verbose` for detailed logging (visible with `-Verbose` flag)
+- Use `Write-Host` for user-facing status messages
+- Use `throw` for fatal errors that should stop execution
+- Always include descriptive comments for complex operations
 
 ## Error Handling
 
