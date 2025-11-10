@@ -74,9 +74,9 @@ else {
 }
 
 # Constantes (sobrescreve valores padrão de Functions.ps1 com valores de produção)
-$script:REGISTRY_PATH = "HKEY_CURRENT_USER\Software\FirstFun\Last War-Survival Game"
-$script:GAME_ROOT = Join-Path -Path $env:LOCALAPPDATA -ChildPath "TheLastWar"
-$script:LAUNCHER_PATH = Join-Path -Path $script:GAME_ROOT -ChildPath "Launch.exe"
+$script:REGISTRY_PATH = "HKEY_CURRENT_USER\Software\FunFly\Last War-Survival Game"
+$script:GAME_ROOT = Join-Path -Path $env:LOCALAPPDATA -ChildPath "FunFly\Last War-Survival Game"
+$script:LAUNCHER_PATH = Join-Path -Path $script:GAME_ROOT -ChildPath "LastWarLauncher.exe"
 
 # Determina o diretório do script mesmo quando executado com -NoProfile
 $script:REGEDIT_ROOT = if ($PSScriptRoot) {

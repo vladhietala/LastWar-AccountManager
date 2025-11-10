@@ -9,13 +9,13 @@ if (-not $script:LOCK_FILE) {
     $script:LOCK_FILE = Join-Path -Path $script:REGEDIT_ROOT -ChildPath ".lastwar.lock"
 }
 if (-not $script:REGISTRY_PATH) {
-    $script:REGISTRY_PATH = "HKEY_CURRENT_USER\Software\FirstFun\Last War-Survival Game"
+    $script:REGISTRY_PATH = "HKEY_CURRENT_USER\Software\FunFly\Last War-Survival Game"
 }
 if (-not $script:GAME_ROOT) {
-    $script:GAME_ROOT = Join-Path -Path $env:LOCALAPPDATA -ChildPath "TheLastWar"
+    $script:GAME_ROOT = Join-Path -Path $env:LOCALAPPDATA -ChildPath "FunFly\Last War-Survival Game"
 }
 if (-not $script:LAUNCHER_PATH) {
-    $script:LAUNCHER_PATH = Join-Path -Path $script:GAME_ROOT -ChildPath "Launch.exe"
+    $script:LAUNCHER_PATH = Join-Path -Path $script:GAME_ROOT -ChildPath "LastWarLauncher.exe"
 }
 
 # Timing Constants
@@ -669,8 +669,8 @@ function Find-GameProcess {
     Write-Verbose "Procurando processo do jogo (timeout: $maxAttempts segundos)..."
 
     while ($attempt -lt $maxAttempts) {
-        # Procura por LastWar.exe em qualquer pasta 'app-x.x.x
-        $gameProcess = Get-Process -Name "*LastWar*" -ErrorAction SilentlyContinue | Select-Object -First 1
+        # Procura por LastWar.exe (excluindo LastWarLauncher.exe)
+        $gameProcess = Get-Process -Name "LastWar" -ErrorAction SilentlyContinue | Select-Object -First 1
 
         if ($gameProcess) {
             Write-Host ("Processo do jogo encontrado: {0}" -f $gameProcess.Path)
