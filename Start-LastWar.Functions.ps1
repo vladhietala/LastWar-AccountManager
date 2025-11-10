@@ -584,7 +584,7 @@ function Invoke-RegistryCommand {
         Executa comandos reg.exe com tratamento de erro padronizado
 
     .PARAMETER Operation
-        A operação a executar (import, export, etc)
+        A operação a executar (import, export, delete)
 
     .PARAMETER Arguments
         Array de argumentos para passar ao reg.exe
@@ -595,12 +595,15 @@ function Invoke-RegistryCommand {
     .PARAMETER ErrorContext
         Contexto do erro para mensagens mais claras
 
+    .PARAMETER ContinueOnError
+        Se especificado, não lança exceção em caso de erro (apenas exibe warning)
+
     .OUTPUTS
-        Retorna $true se sucesso, lança exceção se falhar
+        Retorna $true se sucesso, $false se falhar com ContinueOnError, lança exceção caso contrário
     #>
     param(
         [Parameter(Mandatory)]
-        [ValidateSet('import', 'export')]
+        [ValidateSet('import', 'export', 'delete')]
         [string]$Operation,
 
         [Parameter(Mandatory)]
@@ -610,10 +613,16 @@ function Invoke-RegistryCommand {
         [string]$SuccessMessage,
 
         [Parameter(Mandatory)]
-        [string]$ErrorContext
+        [string]$ErrorContext,
+
+        [switch]$ContinueOnError
     )
 
     try {
+        # Log do comando sendo executado
+        $commandLine = "reg {0} {1}" -f $Operation, ($Arguments -join ' ')
+        Write-Verbose ("Executando: {0}" -f $commandLine)
+
         $result = & reg $Operation @Arguments 2>&1
 
         if ($LASTEXITCODE -eq 0) {
@@ -621,11 +630,27 @@ function Invoke-RegistryCommand {
             return $true
         }
         else {
-            throw ("reg {0} retornou erro (código {1}): {2}" -f $Operation, $LASTEXITCODE, $result)
+            $errorMessage = ("reg {0} retornou erro (código {1}): {2}" -f $Operation, $LASTEXITCODE, $result)
+
+            if ($ContinueOnError) {
+                Write-Verbose ("{0}: {1}" -f $ErrorContext, $errorMessage)
+                return $false
+            }
+            else {
+                throw $errorMessage
+            }
         }
     }
     catch {
-        throw ("{0}: {1}" -f $ErrorContext, $_)
+        $fullError = ("{0}: {1}" -f $ErrorContext, $_)
+
+        if ($ContinueOnError) {
+            Write-Verbose $fullError
+            return $false
+        }
+        else {
+            throw $fullError
+        }
     }
 }
 
@@ -633,6 +658,16 @@ function Import-GameRegistry {
     param (
         [string]$RegFilePath
     )
+
+    Write-Host "Limpando registro anterior..."
+
+    # Deleta a chave do registro para garantir clean slate (evita acúmulo de valores)
+    Invoke-RegistryCommand `
+        -Operation 'delete' `
+        -Arguments @($script:REGISTRY_PATH, '/f') `
+        -SuccessMessage "Registro limpo com sucesso" `
+        -ErrorContext "Aviso: Não foi possível limpar o registro (pode não existir)" `
+        -ContinueOnError
 
     Write-Host "Importando configurações do registro..."
 
