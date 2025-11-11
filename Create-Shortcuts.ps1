@@ -8,7 +8,7 @@
     Este script descobre automaticamente todas as contas na pasta Accounts/
     e cria atalhos no Start Menu do Windows para acesso rápido.
 
-    Os atalhos são criados em: Start Menu\Programs\FirstFun\
+    Os atalhos são criados em: Start Menu\Programs\FunFly\
 
     Ao mover o repositório, basta executar este script novamente para
     atualizar todos os atalhos com os novos caminhos.
@@ -48,7 +48,7 @@ param (
 $script:REPO_PATH = $PSScriptRoot
 $script:LAUNCH_SCRIPT = Join-Path -Path $script:REPO_PATH -ChildPath "Start-LastWar.ps1"
 $script:PWSH_PATH = "C:\Program Files\PowerShell\7\pwsh.exe"
-$script:SHORTCUTS_FOLDER = Join-Path -Path $env:APPDATA -ChildPath "Microsoft\Windows\Start Menu\Programs\FirstFun"
+$script:SHORTCUTS_FOLDER = Join-Path -Path $env:APPDATA -ChildPath "Microsoft\Windows\Start Menu\Programs\FunFly"
 $script:ACCOUNTS_FOLDER = Join-Path -Path $script:REPO_PATH -ChildPath "Accounts"
 
 function Get-AccountList {
