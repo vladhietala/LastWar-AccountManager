@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Windows Registry management system for "The Last War: Survival Game" that enables switching between multiple game accounts by manipulating Windows Registry entries. The game stores account data in `HKEY_CURRENT_USER\Software\FirstFun\Last War-Survival Game`.
+This is a Windows Registry management system for "The Last War: Survival Game" that enables switching between multiple game accounts by manipulating Windows Registry entries. The game stores account data in `HKEY_CURRENT_USER\Software\FunFly\Last War-Survival Game`.
 
 ## Core Architecture
 
@@ -24,7 +24,7 @@ This is a Windows Registry management system for "The Last War: Survival Game" t
    - Creates/updates Windows Start Menu shortcuts for quick access
    - Removes orphaned shortcuts (accounts that no longer exist)
    - Uses dynamic paths (updates automatically when repository is moved)
-   - Shortcuts are created in: `Start Menu\Programs\FirstFun\`
+   - Shortcuts are created in: `Start Menu\Programs\FunFly\`
 
 ### Utility Scripts (Tools/)
 
@@ -69,7 +69,7 @@ The system follows this sequence when switching accounts:
 4. **Backup**: Creates timestamped backup in Backups/{AccountName}/ (only if different from last backup based on SHA256 hash)
 5. **Registry Cleanup**: Deletes existing registry key using `reg delete` to prevent value accumulation
 6. **Import**: Loads account .reg file into Windows Registry using `reg import`
-7. **Launch**: Starts game via `%LOCALAPPDATA%\TheLastWar\Launch.exe`
+7. **Launch**: Starts game via `%LOCALAPPDATA%\FunFly\Last War-Survival Game\LastWarLauncher.exe`
 8. **Monitor**: Waits for game process (searches for LastWar.exe, timeout 90s)
 9. **Await Exit**: Blocks until game process terminates
 10. **Grace Period**: Waits 1 second for registry write operations to complete
@@ -120,8 +120,8 @@ Registry files are Unicode-encoded Windows Registry Editor Version 5.00 format c
 ### Comparing two registry keys (utility)
 
 ```powershell
-.\Tools\Compare-LastWarKeys.ps1 -KeyPath1 "HKCU:\Software\FirstFun\LastWar-Account1" `
-                                -KeyPath2 "HKCU:\Software\FirstFun\LastWar-Account2" `
+.\Tools\Compare-LastWarKeys.ps1 -KeyPath1 "HKCU:\Software\FunFly\Last War-Survival Game" `
+                                -KeyPath2 "HKCU:\Software\FunFly\Last War-Survival Game" `
                                 -OutRegFile ".\Diff.reg"
 ```
 
@@ -151,10 +151,10 @@ Use VSCode's PowerShell debugging (F5) or run with `-Verbose` flag:
 ## Important Constants
 
 - **Repository Location**: Detected automatically via `$PSScriptRoot`
-- **Registry Path**: `HKEY_CURRENT_USER\Software\FirstFun\Last War-Survival Game`
-- **Game Launcher**: `%LOCALAPPDATA%\TheLastWar\Launch.exe`
-- **Game Root**: `%LOCALAPPDATA%\TheLastWar`
-- **Shortcuts Location**: `%APPDATA%\Microsoft\Windows\Start Menu\Programs\FirstFun\`
+- **Registry Path**: `HKEY_CURRENT_USER\Software\FunFly\Last War-Survival Game`
+- **Game Launcher**: `%LOCALAPPDATA%\FunFly\Last War-Survival Game\LastWarLauncher.exe`
+- **Game Root**: `%LOCALAPPDATA%\FunFly\Last War-Survival Game`
+- **Shortcuts Location**: `%APPDATA%\Microsoft\Windows\Start Menu\Programs\FunFly\`
 - **Lock File**: `.lastwar.lock` (in repository root)
 - **Default Max Backups**: 10 per account
 - **Registry Decoder**: `Tools/ConvertFrom-RegHex.ps1` (supports Text, Detailed, and JSON output formats)
@@ -304,7 +304,7 @@ The repository includes a script for managing Start Menu shortcuts:
 ### Create-Shortcuts.ps1
 
 - **Auto-discovery**: Scans Accounts/ folder for all .reg files (excludes templates like Initial.reg)
-- **Creates shortcuts**: In `Start Menu\Programs\FirstFun\` for each account
+- **Creates shortcuts**: In `Start Menu\Programs\FunFly\` for each account
 - **Orphan cleanup**: Automatically removes shortcuts for deleted accounts
 - **Dynamic paths**: Uses current repository location automatically
 - **Custom icons**: Optional `-IconPath` parameter for personalization
