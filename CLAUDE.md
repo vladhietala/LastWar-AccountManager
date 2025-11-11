@@ -28,13 +28,23 @@ This is a Windows Registry management system for "The Last War: Survival Game" t
 
 ### Utility Scripts (Tools/)
 
-3. **Tools/Compare-LastWarKeys.ps1** - Registry diffing utility
+1. **Tools/ConvertFrom-RegHex.ps1** - Registry hex decoder and analyzer
+   - Decodes Windows Registry .reg files to human-readable formats
+   - Supports all registry types (REG_SZ, REG_DWORD, REG_QWORD, REG_BINARY, etc.)
+   - Auto-detects encoding (UTF-16 LE, UTF-8, JSON, DWORD/QWORD)
+   - Three output formats: Text (default), Detailed (with hex dumps), JSON
+   - `-ShowKeyNames` removes Unity PlayerPrefs `_h` hash suffixes
+   - Includes `SimpleName` field in JSON output for cleaner key names
+   - Can combine `-Format Json` with `-OutputFile` for structured exports
+   - Useful for debugging account data and understanding game state
+
+2. **Tools/Compare-LastWarKeys.ps1** - Registry diffing utility
    - Generates .reg files containing only differences between two registry keys
    - Outputs deletion entries (`"name"=-`) for removed values
    - Useful for understanding account-specific changes
    - **Note**: Created during initial development when exploring registry key manipulation approach
 
-4. **Tools/Launch-LastWar.ps1** - Logging wrapper script (optional)
+3. **Tools/Launch-LastWar.ps1** - Logging wrapper script (optional)
    - Provides error logging to `%TEMP%\lastwar_error.log`
    - Ensures correct working directory
    - Delegates to Start-LastWar.ps1
@@ -42,10 +52,10 @@ This is a Windows Registry management system for "The Last War: Survival Game" t
 
 ### Directory Structure
 
-```
+```text
 Accounts/        - Active .reg files for each account (dynamically discovered)
 Backups/         - Timestamped backups organized by account name
-Tools/           - Utility scripts (Compare-LastWarKeys.ps1, Launch-LastWar.ps1)
+Tools/           - Utility scripts (Compare-LastWarKeys.ps1, Launch-LastWar.ps1, ConvertFrom-RegHex.ps1)
 .vscode/         - Contains PowerShell debug configuration
 ```
 
@@ -69,6 +79,7 @@ The system follows this sequence when switching accounts:
 ### Registry File Format
 
 Registry files are Unicode-encoded Windows Registry Editor Version 5.00 format containing:
+
 - Unity analytics/session data (player_sessionid, cloud_userid)
 - Game configuration (screen resolution, fullscreen mode)
 - Account identifiers (RANDD0M_ID, distinct_id, alliance_id)
@@ -78,17 +89,36 @@ Registry files are Unicode-encoded Windows Registry Editor Version 5.00 format c
 ## Common Development Tasks
 
 ### Running the main script
+
 ```powershell
 .\Start-LastWar.ps1 -Conta <AccountName>
 .\Start-LastWar.ps1 -Conta <AccountName> -MaxBackups 15  # Customize backup retention
 ```
 
 ### Running with error logging (optional)
+
 ```powershell
 .\Tools\Launch-LastWar.ps1 -Conta <AccountName>
 ```
 
+### Analyzing registry files
+
+```powershell
+# View decoded registry data in console
+.\Tools\ConvertFrom-RegHex.ps1 -RegFilePath ".\Accounts\Vlad.reg"
+
+# Show simplified key names (removes Unity's _hXXXXXXXXXX suffixes)
+.\Tools\ConvertFrom-RegHex.ps1 -RegFilePath ".\Accounts\Vlad.reg" -ShowKeyNames
+
+# Export to JSON for programmatic analysis
+.\Tools\ConvertFrom-RegHex.ps1 -RegFilePath ".\Accounts\Vlad.reg" -Format Json -OutputFile "vlad-data.json"
+
+# Detailed analysis with hex dumps
+.\Tools\ConvertFrom-RegHex.ps1 -RegFilePath ".\Accounts\Vlad.reg" -Format Detailed -OutputFile "analysis.txt"
+```
+
 ### Comparing two registry keys (utility)
+
 ```powershell
 .\Tools\Compare-LastWarKeys.ps1 -KeyPath1 "HKCU:\Software\FirstFun\LastWar-Account1" `
                                 -KeyPath2 "HKCU:\Software\FirstFun\LastWar-Account2" `
@@ -96,6 +126,7 @@ Registry files are Unicode-encoded Windows Registry Editor Version 5.00 format c
 ```
 
 ### Creating/updating Start Menu shortcuts
+
 ```powershell
 .\Create-Shortcuts.ps1
 .\Create-Shortcuts.ps1 -IconPath "C:\Icons\game.ico"  # With custom icon
@@ -103,13 +134,16 @@ Registry files are Unicode-encoded Windows Registry Editor Version 5.00 format c
 ```
 
 ### Adding a new account
+
 1. Create or export a .reg file with the account's registry data
 2. Place it in the Accounts/ folder with a descriptive name (e.g., `NewAccount.reg`)
 3. Run `.\Create-Shortcuts.ps1` to create a shortcut for the new account
 4. The script will automatically detect it as an available account
 
 ### Testing PowerShell scripts
+
 Use VSCode's PowerShell debugging (F5) or run with `-Verbose` flag:
+
 ```powershell
 .\Start-LastWar.ps1 -Conta Vlad -Verbose
 ```
@@ -137,27 +171,32 @@ Use VSCode's PowerShell debugging (F5) or run with `-Verbose` flag:
 When working with PowerShell code in this repository, follow these guidelines:
 
 ### String Formatting
+
 - **Prefer `-f` format operator for complex string construction** instead of string interpolation
 - Use `-f` when combining multiple variables or expressions to improve readability
 - Simple interpolation with `"$variable"` is acceptable for single variables
 
 **Good examples (complex):**
+
 ```powershell
 $errorMessage = "reg {0} retornou erro (código {1}): {2}" -f $Operation, $LASTEXITCODE, $result
 Write-Host ("Processo encontrado: {0} (PID: {1})" -f $process.Name, $process.Id)
 ```
 
 **Acceptable (simple):**
+
 ```powershell
 Write-Host "Usando conta: $Conta"
 ```
 
 ### Path Construction
+
 - **Always use `Join-Path`** instead of string concatenation for file paths
 - Ensures correct path separators across different scenarios
 - Use `-AdditionalChildPath` for joining multiple path segments
 
 **Good examples:**
+
 ```powershell
 $accountsPath = Join-Path -Path $repoRoot -ChildPath "Accounts"
 $backupPath = Join-Path -Path $backupFolder -ChildPath "Backup_${Conta}_${timestamp}.reg"
@@ -165,12 +204,14 @@ $deepPath = Join-Path -Path $base -ChildPath "Level1" -AdditionalChildPath "Leve
 ```
 
 **Avoid:**
+
 ```powershell
 $accountsPath = "$repoRoot\Accounts"  # Bad: hardcoded separator
 $accountsPath = "$repoRoot/Accounts"  # Bad: wrong separator for Windows
 ```
 
 ### Other Conventions
+
 - Use `Write-Verbose` for detailed logging (visible with `-Verbose` flag)
 - Use `Write-Host` for user-facing status messages
 - Use `throw` for fatal errors that should stop execution
@@ -179,6 +220,7 @@ $accountsPath = "$repoRoot/Accounts"  # Bad: wrong separator for Windows
 ## Error Handling
 
 All scripts use proper error handling with try-catch blocks. The main script will:
+
 - Validate account existence before proceeding
 - Check for required files and paths
 - Throw descriptive errors with context
@@ -195,6 +237,7 @@ All scripts use proper error handling with try-catch blocks. The main script wil
 ## Process Monitoring
 
 The game launch process uses a polling mechanism:
+
 - Searches for processes matching `*LastWar*` pattern
 - 90-second timeout with 1-second intervals (increased to accommodate UAC prompts)
 - Progress messages every 10 seconds when using `-Verbose`
@@ -206,20 +249,23 @@ The game launch process uses a polling mechanism:
 The game requires administrator privileges to run. The script handles this automatically:
 
 ### Auto-Elevation Mechanism
+
 - Detects if running without admin privileges using `Test-Administrator` function
 - Automatically re-launches itself elevated using `Start-Process -Verb RunAs`
 - Preserves all command-line parameters (`-Conta`, `-MaxBackups`, `-Verbose`)
 - Displays clear messages during elevation process
 - Uses `$PSCommandPath` with fallbacks for reliable script path resolution
 
-### Benefits
+### Auto-Elevation Benefits
+
 - **No manual UAC prompts during gameplay**: UAC prompt appears once at script start
 - **Seamless experience**: Users don't need to manually run as admin
 - **Works with shortcuts**: Start Menu shortcuts work normally without special configuration
 - **Single window**: Elevated process runs independently, original process exits cleanly
 - **Fail-safe**: If elevation fails, shows clear error message
 
-### Behavior
+### Auto-Elevation Behavior
+
 - If already running as admin: continues normally (no re-launch)
 - If not admin: shows yellow banner, requests elevation, original process exits
 - If user cancels UAC: elevated process never starts, clean exit
@@ -230,6 +276,7 @@ The game requires administrator privileges to run. The script handles this autom
 To prevent registry corruption from simultaneous executions:
 
 ### Lock Mechanism
+
 - Lock file: `.lastwar.lock` in repository root (JSON format, ignored by Git)
 - Contains: account name, process ID, and timestamp
 - Validated on startup - checks if process is still active
@@ -237,11 +284,13 @@ To prevent registry corruption from simultaneous executions:
 - Repository-specific: Each clone/location has its own lock
 
 ### Lock Behavior
+
 - **If lock exists**: Script displays error with details (account name, PID, duration) and exits after 10 seconds
 - **Lock creation**: Immediately after validation, before any registry operations
 - **Lock release**: Guaranteed via try-finally block, even on errors
 
-### Benefits
+### Lock System Benefits
+
 - Prevents Export-GameRegistry from one account overwriting another account's .reg file
 - Allows safe sequential account switching without corruption
 - Self-healing: automatically removes stale locks from crashed processes
@@ -251,6 +300,7 @@ To prevent registry corruption from simultaneous executions:
 The repository includes a script for managing Start Menu shortcuts:
 
 ### Create-Shortcuts.ps1
+
 - **Auto-discovery**: Scans Accounts/ folder for all .reg files (excludes templates like Initial.reg)
 - **Creates shortcuts**: In `Start Menu\Programs\FirstFun\` for each account
 - **Orphan cleanup**: Automatically removes shortcuts for deleted accounts
@@ -259,11 +309,13 @@ The repository includes a script for managing Start Menu shortcuts:
 - **Pin to Start**: Optional `-PinToStart` switch to attempt automatic pinning (Windows API limitations may prevent this)
 
 ### Workflow
+
 1. Add/remove account .reg files in Accounts/
 2. Run `.\Create-Shortcuts.ps1`
 3. All shortcuts update automatically with correct paths
 
-### Benefits
+### Shortcut Benefits
+
 - No manual shortcut editing needed
 - Repository-independent (works after moving repo)
 - Versionable in Git (script, not binary .lnk files)
