@@ -2,6 +2,8 @@
 
 A PowerShell-based Windows Registry management system for switching between multiple accounts in "The Last War: Survival Game".
 
+**🌐 Languages**: [English](README.md) | [Português (Brasil)](README.pt-BR.md)
+
 ## Features
 
 - **Multi-Account Support**: Easily switch between different game accounts
@@ -14,7 +16,7 @@ A PowerShell-based Windows Registry management system for switching between mult
 
 - Windows OS
 - PowerShell Core
-- The Last War: Survival Game installed at `C:\Users\[username]\AppData\Local\TheLastWar\`
+- The Last War: Survival Game installed at `%LOCALAPPDATA%\FunFly\Last War-Survival Game\`
 
 ## Quick Start
 
@@ -22,13 +24,13 @@ A PowerShell-based Windows Registry management system for switching between mult
 
 ```powershell
 # Launch game with specific account
-.\Start-LastWar.ps1 -Conta AccountName
+.\Start-LastWar.ps1 -Account AccountName
 
 # Launch with custom backup retention
-.\Start-LastWar.ps1 -Conta AccountName -MaxBackups 15
+.\Start-LastWar.ps1 -Account AccountName -MaxBackups 15
 
 # Launch with error logging
-.\Launch-LastWar.ps1 -Conta AccountName
+.\Tools\Launch-LastWar.ps1 -Account AccountName
 ```
 
 ### Adding a New Account
@@ -41,13 +43,16 @@ A PowerShell-based Windows Registry management system for switching between mult
 
 ```
 .
-├── Accounts/           # Account registry files (.reg)
-├── Backups/           # Automatic timestamped backups (organized by account)
-├── registry_files/    # Historical/test registry files
-├── Start-LastWar.ps1  # Main script
-├── Launch-LastWar.ps1 # Wrapper with error logging
-├── Compare-LastWarKeys.ps1  # Registry comparison utility
-└── CLAUDE.md          # Developer documentation
+├── Accounts/                      # Account registry files (.reg)
+├── Backups/                       # Automatic timestamped backups (organized by account)
+├── Tools/                         # Utility scripts
+│   ├── Compare-LastWarKeys.ps1    # Registry comparison utility
+│   ├── ConvertFrom-RegHex.ps1     # Registry hex value decoder
+│   └── Launch-LastWar.ps1         # Wrapper with error logging
+├── Start-LastWar.ps1              # Main script
+├── Start-LastWar.Functions.ps1    # Shared functions
+├── Create-Shortcuts.ps1           # Start Menu shortcut manager
+└── CLAUDE.md                      # Developer documentation
 ```
 
 ## How It Works
@@ -63,17 +68,33 @@ A PowerShell-based Windows Registry management system for switching between mult
 ### Compare Registry Keys
 
 ```powershell
-.\Compare-LastWarKeys.ps1 -KeyPath1 "HKCU:\Software\FirstFun\LastWar-Account1" `
-                          -KeyPath2 "HKCU:\Software\FirstFun\LastWar-Account2" `
-                          -OutRegFile "C:\Backups\Diff.reg"
+.\Tools\Compare-LastWarKeys.ps1 -KeyPath1 "HKCU:\Software\FunFly\LastWar-Account1" `
+                                -KeyPath2 "HKCU:\Software\FunFly\LastWar-Account2" `
+                                -OutRegFile "C:\Backups\Diff.reg"
+```
+
+### Decode Registry Hex Values
+
+```powershell
+.\Tools\ConvertFrom-RegHex.ps1 -RegFilePath ".\Accounts\Account.reg"
+.\Tools\ConvertFrom-RegHex.ps1 -RegFilePath ".\Accounts\Account.reg" -OutputFormat Json
+```
+
+### Create/Update Start Menu Shortcuts
+
+```powershell
+.\Create-Shortcuts.ps1
+.\Create-Shortcuts.ps1 -IconPath "C:\Icons\game.ico"
+.\Create-Shortcuts.ps1 -PinToStart
 ```
 
 ## Configuration
 
 Key constants are defined in `Start-LastWar.ps1`:
-- Registry Path: `HKEY_CURRENT_USER\Software\FirstFun\Last War-Survival Game`
-- Game Launcher: `C:\Users\vladh\AppData\Local\TheLastWar\Launch.exe`
-- Default Max Backups: 10 per account
+
+- Registry Path: `HKEY_CURRENT_USER\Software\FunFly\Last War-Survival Game`
+- Game Launcher: `%LOCALAPPDATA%\FunFly\Last War-Survival Game\LastWarLauncher.exe`
+- Default Max Backups: 20 per account
 
 ## Security Note
 

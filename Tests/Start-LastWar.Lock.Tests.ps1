@@ -1,30 +1,30 @@
 BeforeAll {
-    # Import apenas das funções, sem executar o script completo
+    # Import only the functions, without executing the complete script
     . "$PSScriptRoot\..\Start-LastWar.Functions.ps1"
 
-    # Sobrescreve variáveis de script para testes
+    # Override script variables for testing
     $script:LOCK_FILE = Join-Path -Path $TestDrive -ChildPath ".lastwar.lock.test"
     $script:REGEDIT_ROOT = $TestDrive
 }
 
 Describe "Test-ScriptLock" {
     BeforeEach {
-        # Limpa o lock file antes de cada teste
+        # Clean lock file before each test
         if (Test-Path $script:LOCK_FILE) {
             Remove-Item $script:LOCK_FILE -Force
         }
     }
 
-    Context "Quando não há arquivo de lock" {
-        It "Deve retornar null" {
+    Context "When there is no lock file" {
+        It "Should return null" {
             $result = Test-ScriptLock
             $result | Should -BeNullOrEmpty
         }
     }
 
-    Context "Quando há arquivo de lock com processo ativo" {
-        It "Deve retornar IsLocked = true" {
-            # Cria lock file com PID atual
+    Context "When there is a lock file with active process" {
+        It "Should return IsLocked = true" {
+            # Create lock file with current PID
             $lockData = @{
                 AccountName = "TestAccount"
                 ProcessId = $PID
@@ -43,9 +43,9 @@ Describe "Test-ScriptLock" {
         }
     }
 
-    Context "Quando há arquivo de lock com processo inexistente" {
-        It "Deve retornar IsOrphaned = true" {
-            # Cria lock file com PID que não existe (99999)
+    Context "When there is a lock file with non-existent process" {
+        It "Should return IsOrphaned = true" {
+            # Create lock file with non-existent PID (99999)
             $lockData = @{
                 AccountName = "TestAccount"
                 ProcessId = 99999
@@ -63,9 +63,9 @@ Describe "Test-ScriptLock" {
         }
     }
 
-    Context "Quando há arquivo de lock corrompido" {
-        It "Deve retornar IsCorrupted = true" {
-            # Cria lock file com conteúdo inválido
+    Context "When there is a corrupted lock file" {
+        It "Should return IsCorrupted = true" {
+            # Create lock file with invalid content
             "invalid json content {{{" | Set-Content -Path $script:LOCK_FILE -Force
 
             $result = Test-ScriptLock
@@ -90,9 +90,9 @@ Describe "Remove-OrphanedLock" {
         }
     }
 
-    Context "Quando há lock órfão" {
-        It "Deve remover o arquivo de lock" {
-            # Cria lock órfão
+    Context "When there is an orphaned lock" {
+        It "Should remove the lock file" {
+            # Create orphaned lock
             $lockData = @{
                 AccountName = "TestAccount"
                 ProcessId = 99999
@@ -107,8 +107,8 @@ Describe "Remove-OrphanedLock" {
         }
     }
 
-    Context "Quando há lock corrompido" {
-        It "Deve remover o arquivo de lock" {
+    Context "When there is a corrupted lock" {
+        It "Should remove the lock file" {
             "invalid json" | Set-Content -Path $script:LOCK_FILE -Force
 
             Remove-OrphanedLock
@@ -117,9 +117,9 @@ Describe "Remove-OrphanedLock" {
         }
     }
 
-    Context "Quando há lock ativo" {
-        It "Não deve remover o arquivo de lock" {
-            # Cria lock com processo ativo
+    Context "When there is an active lock" {
+        It "Should not remove the lock file" {
+            # Create lock with active process
             $lockData = @{
                 AccountName = "TestAccount"
                 ProcessId = $PID
@@ -134,8 +134,8 @@ Describe "Remove-OrphanedLock" {
         }
     }
 
-    Context "Quando não há lock" {
-        It "Não deve gerar erro" {
+    Context "When there is no lock" {
+        It "Should not generate error" {
             { Remove-OrphanedLock } | Should -Not -Throw
         }
     }
@@ -154,8 +154,8 @@ Describe "New-ScriptLock" {
         }
     }
 
-    Context "Quando cria novo lock" {
-        It "Deve criar arquivo de lock com dados corretos" {
+    Context "When creating new lock" {
+        It "Should create lock file with correct data" {
             New-ScriptLock -AccountName "TestAccount"
 
             Test-Path $script:LOCK_FILE | Should -Be $true
@@ -166,13 +166,13 @@ Describe "New-ScriptLock" {
             $lockContent.LockTime | Should -Not -BeNullOrEmpty
         }
 
-        It "Deve criar lock com timestamp válido" {
+        It "Should create lock with valid timestamp" {
             New-ScriptLock -AccountName "TestAccount"
 
             $lockContent = Get-Content $script:LOCK_FILE -Raw | ConvertFrom-Json
 
-            # ConvertFrom-Json pode deserializar ISO 8601 para DateTime automaticamente
-            # Verifica se é DateTime ou string ISO 8601 válida
+            # ConvertFrom-Json can deserialize ISO 8601 to DateTime automatically
+            # Check if it's DateTime or valid ISO 8601 string
             if ($lockContent.LockTime -is [DateTime]) {
                 $lockContent.LockTime | Should -BeOfType [DateTime]
             } else {
@@ -195,9 +195,9 @@ Describe "Remove-ScriptLock" {
         }
     }
 
-    Context "Quando há lock existente" {
-        It "Deve remover o arquivo de lock" {
-            # Cria lock
+    Context "When there is an existing lock" {
+        It "Should remove the lock file" {
+            # Create lock
             New-ScriptLock -AccountName "TestAccount"
 
             Test-Path $script:LOCK_FILE | Should -Be $true
@@ -208,8 +208,8 @@ Describe "Remove-ScriptLock" {
         }
     }
 
-    Context "Quando não há lock" {
-        It "Não deve gerar erro" {
+    Context "When there is no lock" {
+        It "Should not generate error" {
             { Remove-ScriptLock } | Should -Not -Throw
         }
     }

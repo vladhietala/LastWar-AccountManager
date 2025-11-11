@@ -1,8 +1,8 @@
 BeforeAll {
-    # Import apenas das funções, sem executar o script completo
+    # Import only the functions, without executing the complete script
     . "$PSScriptRoot\..\Start-LastWar.Functions.ps1"
 
-    # Sobrescreve variáveis de script para testes
+    # Override script variables for testing
     $script:REGEDIT_ROOT = $TestDrive
 }
 
@@ -15,31 +15,31 @@ Describe "Test-BackupNeeded" {
         "Test content" | Set-Content -Path $script:TestSourceFile -Force
     }
 
-    Context "Quando não há backups existentes" {
-        It "Deve retornar true" {
-            $result = Test-BackupNeeded -SourceFile $script:TestSourceFile -BackupFolder $script:TestBackupFolder -Conta "TestAccount"
+    Context "When there are no existing backups" {
+        It "Should return true" {
+            $result = Test-BackupNeeded -SourceFile $script:TestSourceFile -BackupFolder $script:TestBackupFolder -Account "TestAccount"
             $result | Should -Be $true
         }
     }
 
-    Context "Quando há backup idêntico" {
-        It "Deve retornar false" {
-            # Cria backup idêntico
+    Context "When there is an identical backup" {
+        It "Should return false" {
+            # Create identical backup
             $backupFile = Join-Path -Path $script:TestBackupFolder -ChildPath "Backup_TestAccount_20250101_120000.reg"
             Copy-Item -Path $script:TestSourceFile -Destination $backupFile -Force
 
-            $result = Test-BackupNeeded -SourceFile $script:TestSourceFile -BackupFolder $script:TestBackupFolder -Conta "TestAccount"
+            $result = Test-BackupNeeded -SourceFile $script:TestSourceFile -BackupFolder $script:TestBackupFolder -Account "TestAccount"
             $result | Should -Be $false
         }
     }
 
-    Context "Quando há backup diferente" {
-        It "Deve retornar true" {
-            # Cria backup com conteúdo diferente
+    Context "When there is a different backup" {
+        It "Should return true" {
+            # Create backup with different content
             $backupFile = Join-Path -Path $script:TestBackupFolder -ChildPath "Backup_TestAccount_20250101_120000.reg"
             "Different content" | Set-Content -Path $backupFile -Force
 
-            $result = Test-BackupNeeded -SourceFile $script:TestSourceFile -BackupFolder $script:TestBackupFolder -Conta "TestAccount"
+            $result = Test-BackupNeeded -SourceFile $script:TestSourceFile -BackupFolder $script:TestBackupFolder -Account "TestAccount"
             $result | Should -Be $true
         }
     }
@@ -60,24 +60,24 @@ Describe "Remove-OldBackups" {
         New-Item -ItemType Directory -Path $script:TestBackupFolder -Force | Out-Null
     }
 
-    Context "Quando há mais backups que o limite" {
-        It "Deve manter apenas os N mais recentes" {
-            # Cria 5 backups com timestamps diferentes
+    Context "When there are more backups than the limit" {
+        It "Should keep only the N most recent" {
+            # Create 5 backups with different timestamps
             for ($i = 1; $i -le 5; $i++) {
                 $backupFile = Join-Path -Path $script:TestBackupFolder -ChildPath "Backup_TestAccount_2025010$i`_120000.reg"
                 "Backup $i" | Set-Content -Path $backupFile -Force
                 Start-Sleep -Milliseconds 100
             }
 
-            # Mantém apenas 3
-            Remove-OldBackups -BackupFolder $script:TestBackupFolder -Conta "TestAccount" -MaxBackups 3
+            # Keep only 3
+            Remove-OldBackups -BackupFolder $script:TestBackupFolder -Account "TestAccount" -MaxBackups 3
 
             $remainingBackups = Get-ChildItem -Path $script:TestBackupFolder -Filter "Backup_TestAccount_*.reg"
             $remainingBackups.Count | Should -Be 3
         }
 
-        It "Deve remover os backups mais antigos" {
-            # Cria backups com timestamps ordenados
+        It "Should remove the oldest backups" {
+            # Create backups with ordered timestamps
             $timestamps = @("20250101_120000", "20250102_120000", "20250103_120000", "20250104_120000", "20250105_120000")
             foreach ($ts in $timestamps) {
                 $backupFile = Join-Path -Path $script:TestBackupFolder -ChildPath "Backup_TestAccount_$ts.reg"
@@ -85,34 +85,34 @@ Describe "Remove-OldBackups" {
                 Start-Sleep -Milliseconds 100
             }
 
-            Remove-OldBackups -BackupFolder $script:TestBackupFolder -Conta "TestAccount" -MaxBackups 2
+            Remove-OldBackups -BackupFolder $script:TestBackupFolder -Account "TestAccount" -MaxBackups 2
 
             $remainingBackups = Get-ChildItem -Path $script:TestBackupFolder -Filter "Backup_TestAccount_*.reg" | Sort-Object LastWriteTime -Descending
             $remainingBackups.Count | Should -Be 2
-            # Os 2 mais recentes devem ser os últimos criados
+            # The 2 most recent should be the last ones created
             $remainingBackups[0].Name | Should -BeLike "*20250105*"
             $remainingBackups[1].Name | Should -BeLike "*20250104*"
         }
     }
 
-    Context "Quando há menos backups que o limite" {
-        It "Não deve remover nenhum backup" {
-            # Cria apenas 2 backups
+    Context "When there are fewer backups than the limit" {
+        It "Should not remove any backup" {
+            # Create only 2 backups
             for ($i = 1; $i -le 2; $i++) {
                 $backupFile = Join-Path -Path $script:TestBackupFolder -ChildPath "Backup_TestAccount_2025010$i`_120000.reg"
                 "Backup $i" | Set-Content -Path $backupFile -Force
             }
 
-            Remove-OldBackups -BackupFolder $script:TestBackupFolder -Conta "TestAccount" -MaxBackups 5
+            Remove-OldBackups -BackupFolder $script:TestBackupFolder -Account "TestAccount" -MaxBackups 5
 
             $remainingBackups = Get-ChildItem -Path $script:TestBackupFolder -Filter "Backup_TestAccount_*.reg"
             $remainingBackups.Count | Should -Be 2
         }
     }
 
-    Context "Quando não há backups" {
-        It "Não deve gerar erro" {
-            { Remove-OldBackups -BackupFolder $script:TestBackupFolder -Conta "TestAccount" -MaxBackups 3 } | Should -Not -Throw
+    Context "When there are no backups" {
+        It "Should not generate error" {
+            { Remove-OldBackups -BackupFolder $script:TestBackupFolder -Account "TestAccount" -MaxBackups 3 } | Should -Not -Throw
         }
     }
 
@@ -130,9 +130,9 @@ Describe "New-RegistryBackup" {
         "Windows Registry Editor Version 5.00" | Set-Content -Path $script:TestSourceFile -Force
     }
 
-    Context "Quando cria primeiro backup" {
-        It "Deve criar arquivo de backup" {
-            New-RegistryBackup -Path $TestDrive -Conta "TestAccount" -SourceFile $script:TestSourceFile -MaxBackups 10
+    Context "When creating first backup" {
+        It "Should create backup file" {
+            New-RegistryBackup -Path $TestDrive -Account "TestAccount" -SourceFile $script:TestSourceFile -MaxBackups 10
 
             $backupFolder = Join-Path -Path $TestDrive -ChildPath "Backups\TestAccount"
             Test-Path $backupFolder | Should -Be $true
@@ -141,24 +141,24 @@ Describe "New-RegistryBackup" {
             $backups.Count | Should -Be 1
         }
 
-        It "Deve nomear backup com timestamp correto" {
-            New-RegistryBackup -Path $TestDrive -Conta "TestAccount" -SourceFile $script:TestSourceFile -MaxBackups 10
+        It "Should name backup with correct timestamp" {
+            New-RegistryBackup -Path $TestDrive -Account "TestAccount" -SourceFile $script:TestSourceFile -MaxBackups 10
 
             $backupFolder = Join-Path -Path $TestDrive -ChildPath "Backups\TestAccount"
             $backup = Get-ChildItem -Path $backupFolder -Filter "Backup_TestAccount_*.reg" | Select-Object -First 1
 
-            # Formato: Backup_TestAccount_YYYYMMDD_HHMMSS.reg
+            # Format: Backup_TestAccount_YYYYMMDD_HHMMSS.reg
             $backup.Name | Should -Match "^Backup_TestAccount_\d{8}_\d{6}\.reg$"
         }
     }
 
-    Context "Quando backup não é necessário" {
-        It "Não deve criar novo backup" {
-            # Cria primeiro backup
-            New-RegistryBackup -Path $TestDrive -Conta "TestAccount" -SourceFile $script:TestSourceFile -MaxBackups 10
+    Context "When backup is not necessary" {
+        It "Should not create new backup" {
+            # Create first backup
+            New-RegistryBackup -Path $TestDrive -Account "TestAccount" -SourceFile $script:TestSourceFile -MaxBackups 10
 
-            # Tenta criar segundo backup sem alterar o arquivo
-            New-RegistryBackup -Path $TestDrive -Conta "TestAccount" -SourceFile $script:TestSourceFile -MaxBackups 10
+            # Try to create second backup without modifying the file
+            New-RegistryBackup -Path $TestDrive -Account "TestAccount" -SourceFile $script:TestSourceFile -MaxBackups 10
 
             $backupFolder = Join-Path -Path $TestDrive -ChildPath "Backups\TestAccount"
             $backups = Get-ChildItem -Path $backupFolder -Filter "Backup_TestAccount_*.reg"
@@ -166,18 +166,18 @@ Describe "New-RegistryBackup" {
         }
     }
 
-    Context "Quando arquivo muda" {
-        It "Deve criar novo backup" {
-            # Cria primeiro backup
-            New-RegistryBackup -Path $TestDrive -Conta "TestAccount" -SourceFile $script:TestSourceFile -MaxBackups 10
+    Context "When file changes" {
+        It "Should create new backup" {
+            # Create first backup
+            New-RegistryBackup -Path $TestDrive -Account "TestAccount" -SourceFile $script:TestSourceFile -MaxBackups 10
 
-            Start-Sleep -Milliseconds 1100  # Garante timestamp diferente
+            Start-Sleep -Milliseconds 1100  # Ensure different timestamp
 
-            # Modifica arquivo
+            # Modify file
             "Windows Registry Editor Version 5.00`n[HKEY_CURRENT_USER\Software\Test]" | Set-Content -Path $script:TestSourceFile -Force
 
-            # Cria segundo backup
-            New-RegistryBackup -Path $TestDrive -Conta "TestAccount" -SourceFile $script:TestSourceFile -MaxBackups 10
+            # Create second backup
+            New-RegistryBackup -Path $TestDrive -Account "TestAccount" -SourceFile $script:TestSourceFile -MaxBackups 10
 
             $backupFolder = Join-Path -Path $TestDrive -ChildPath "Backups\TestAccount"
             $backups = Get-ChildItem -Path $backupFolder -Filter "Backup_TestAccount_*.reg"
@@ -185,12 +185,12 @@ Describe "New-RegistryBackup" {
         }
     }
 
-    Context "Quando excede limite de backups" {
-        It "Deve manter apenas MaxBackups mais recentes" {
-            # Cria 5 backups alterando o arquivo
+    Context "When exceeding backup limit" {
+        It "Should keep only most recent MaxBackups" {
+            # Create 5 backups by modifying the file
             for ($i = 1; $i -le 5; $i++) {
                 "Content $i" | Set-Content -Path $script:TestSourceFile -Force
-                New-RegistryBackup -Path $TestDrive -Conta "TestAccount" -SourceFile $script:TestSourceFile -MaxBackups 3
+                New-RegistryBackup -Path $TestDrive -Account "TestAccount" -SourceFile $script:TestSourceFile -MaxBackups 3
                 Start-Sleep -Milliseconds 1100
             }
 

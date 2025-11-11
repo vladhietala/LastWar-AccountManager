@@ -1,7 +1,7 @@
-# Módulo contendo apenas as funções do Start-LastWar.ps1
-# Este arquivo é usado pelos testes do Pester para importar funções sem executar o script completo
+# Module containing only the functions from Start-LastWar.ps1
+# This file is used by Pester tests to import functions without executing the full script
 
-# Constantes (valores padrão para testes)
+# Constants (default values for testing)
 if (-not $script:REGEDIT_ROOT) {
     $script:REGEDIT_ROOT = if ($PSScriptRoot) { $PSScriptRoot } else { $PWD.Path }
 }
@@ -41,41 +41,41 @@ function Test-GameInstallation {
 
     <#
     .SYNOPSIS
-        Valida que o jogo está instalado e acessível
+        Validates that the game is installed and accessible
 
     .DESCRIPTION
-        Verifica se o diretório do jogo e o launcher existem antes de tentar executar
+        Checks if the game directory and launcher exist before attempting to run
 
     .THROWS
-        Lança exceção se o jogo não estiver instalado corretamente
+        Throws exception if the game is not installed correctly
     #>
 
     if (-not (Test-Path $script:GAME_ROOT)) {
-        throw "Diretório do jogo não encontrado: $script:GAME_ROOT`nVerifique se o jogo está instalado."
+        throw "Game directory not found: $script:GAME_ROOT`nPlease verify the game is installed."
     }
 
     if (-not (Test-Path $script:LAUNCHER_PATH)) {
-        throw "Launcher do jogo não encontrado: $script:LAUNCHER_PATH`nVerifique a instalação do jogo."
+        throw "Game launcher not found: $script:LAUNCHER_PATH`nPlease verify the game installation."
     }
 
-    Write-Verbose "Instalação do jogo validada: $script:GAME_ROOT"
+    Write-Verbose "Game installation validated: $script:GAME_ROOT"
 }
 
 function Test-ScriptLock {
     <#
     .SYNOPSIS
-        Verifica se existe outra instância do script em execução
+        Checks if another instance of the script is running
 
     .DESCRIPTION
-        Verifica a existência de um arquivo de lock e valida se o processo associado ainda está ativo.
-        Esta função apenas lê o estado do lock sem modificá-lo.
+        Checks for the existence of a lock file and validates if the associated process is still active.
+        This function only reads the lock state without modifying it.
 
     .OUTPUTS
-        Retorna um objeto com informações do lock incluindo:
-        - IsLocked: Se há um processo ativo
-        - IsOrphaned: Se o lock existe mas o processo não
-        - IsCorrupted: Se o arquivo está corrompido
-        - AccountName, ProcessId, LockTime: Dados do lock (quando disponíveis)
+        Returns an object with lock information including:
+        - IsLocked: Whether there is an active process
+        - IsOrphaned: Whether the lock exists but the process does not
+        - IsCorrupted: Whether the file is corrupted
+        - AccountName, ProcessId, LockTime: Lock data (when available)
     #>
     if (-not (Test-Path $script:LOCK_FILE)) {
         return $null
@@ -84,7 +84,7 @@ function Test-ScriptLock {
     try {
         $lockContent = Get-Content $script:LOCK_FILE -Raw | ConvertFrom-Json
 
-        # Verifica se o processo ainda está ativo
+        # Check if the process is still active
         $process = Get-Process -Id $lockContent.ProcessId -ErrorAction SilentlyContinue
 
         return [PSCustomObject]@{
@@ -97,7 +97,7 @@ function Test-ScriptLock {
         }
     }
     catch {
-        # Lock file corrompido ou ilegível
+        # Lock file corrupted or unreadable
         return [PSCustomObject]@{
             IsLocked = $false
             IsOrphaned = $false
@@ -115,10 +115,10 @@ function Remove-OrphanedLock {
 
     <#
     .SYNOPSIS
-        Remove arquivo de lock órfão se o processo associado não existir mais
+        Removes orphaned lock file if the associated process no longer exists
 
     .DESCRIPTION
-        Verifica o estado do lock e remove se estiver órfão ou corrompido
+        Checks the lock state and removes it if it is orphaned or corrupted
     #>
     $lockState = Test-ScriptLock
 
@@ -126,13 +126,13 @@ function Remove-OrphanedLock {
         try {
             Remove-Item $script:LOCK_FILE -Force -ErrorAction SilentlyContinue
             if ($lockState.IsOrphaned) {
-                Write-Verbose "Lock órfão removido (PID: $($lockState.ProcessId))"
+                Write-Verbose "Orphaned lock removed (PID: $($lockState.ProcessId))"
             } elseif ($lockState.IsCorrupted) {
-                Write-Verbose "Lock corrompido removido"
+                Write-Verbose "Corrupted lock removed"
             }
         }
         catch {
-            Write-Warning "Não foi possível remover lock órfão: $_"
+            Write-Warning "Could not remove orphaned lock: $_"
         }
     }
 }
@@ -140,19 +140,19 @@ function Remove-OrphanedLock {
 function Assert-NoExistingLock {
     <#
     .SYNOPSIS
-        Verifica se existe um lock ativo e aborta a execução se houver
+        Checks if there is an active lock and aborts execution if so
 
     .DESCRIPTION
-        Valida que não há outra instância do script em execução.
-        Se houver, exibe mensagem de erro detalhada e encerra o processo.
+        Validates that no other instance of the script is running.
+        If there is, displays a detailed error message and exits the process.
     #>
     $existingLock = Test-ScriptLock
 
     if (-not ($existingLock -and $existingLock.IsLocked)) {
-        return  # Sem lock ativo, pode continuar
+        return  # No active lock, can continue
     }
 
-    # ConvertFrom-Json já deserializa ISO 8601 para DateTime
+    # ConvertFrom-Json already deserializes ISO 8601 to DateTime
     $lockTime = if ($existingLock.LockTime -is [DateTime]) {
         $existingLock.LockTime
     } else {
@@ -163,17 +163,17 @@ function Assert-NoExistingLock {
 
     Write-Host ""
     Write-Host "================================================" -ForegroundColor Red
-    Write-Host "ERRO: Outra instância do script já está em execução!" -ForegroundColor Red
+    Write-Host "ERROR: Another instance of the script is already running!" -ForegroundColor Red
     Write-Host "================================================" -ForegroundColor Red
     Write-Host ""
-    Write-Host ("Conta em execução: {0}" -f $existingLock.AccountName) -ForegroundColor Yellow
+    Write-Host ("Account running: {0}" -f $existingLock.AccountName) -ForegroundColor Yellow
     Write-Host ("Process ID: {0}" -f $existingLock.ProcessId) -ForegroundColor Yellow
-    Write-Host ("Iniciado em: {0}" -f $lockTime.ToString('dd/MM/yyyy HH:mm:ss')) -ForegroundColor Yellow
-    Write-Host ("Tempo decorrido: {0} minutos e {1} segundos" -f [Math]::Floor($duration.TotalMinutes), $duration.Seconds) -ForegroundColor Yellow
+    Write-Host ("Started at: {0}" -f $lockTime.ToString('MM/dd/yyyy HH:mm:ss')) -ForegroundColor Yellow
+    Write-Host ("Elapsed time: {0} minutes and {1} seconds" -f [Math]::Floor($duration.TotalMinutes), $duration.Seconds) -ForegroundColor Yellow
     Write-Host ""
-    Write-Host "Aguarde a outra instância finalizar antes de iniciar uma nova." -ForegroundColor Cyan
-    Write-Host "Isso previne que o Export-GameRegistry de uma conta sobrescreva" -ForegroundColor Cyan
-    Write-Host "incorretamente o arquivo .reg de outra conta." -ForegroundColor Cyan
+    Write-Host "Please wait for the other instance to finish before starting a new one." -ForegroundColor Cyan
+    Write-Host "This prevents Export-GameRegistry from one account from overwriting" -ForegroundColor Cyan
+    Write-Host "another account's .reg file incorrectly." -ForegroundColor Cyan
     Write-Host ""
     Start-Sleep -Seconds $script:ERROR_MESSAGE_DISPLAY_SECONDS
     exit 1
@@ -187,10 +187,10 @@ function New-ScriptLock {
 
     <#
     .SYNOPSIS
-        Cria um arquivo de lock para prevenir execuções simultâneas
+        Creates a lock file to prevent simultaneous executions
 
     .PARAMETER AccountName
-        Nome da conta que está sendo executada
+        Name of the account being executed
     #>
 
     $lockData = @{
@@ -201,10 +201,10 @@ function New-ScriptLock {
 
     try {
         $lockData | Set-Content -Path $script:LOCK_FILE -Force
-        Write-Verbose "Lock criado: $script:LOCK_FILE (PID: $PID, Conta: $AccountName)"
+        Write-Verbose "Lock created: $script:LOCK_FILE (PID: $PID, Account: $AccountName)"
     }
     catch {
-        throw "Erro ao criar arquivo de lock: $_"
+        throw "Error creating lock file: $_"
     }
 }
 
@@ -214,23 +214,23 @@ function Remove-ScriptLock {
 
     <#
     .SYNOPSIS
-        Remove o arquivo de lock do script
+        Removes the script's lock file
     #>
     try {
         if (Test-Path $script:LOCK_FILE) {
             Remove-Item $script:LOCK_FILE -Force
-            Write-Verbose "Lock removido: $script:LOCK_FILE"
+            Write-Verbose "Lock removed: $script:LOCK_FILE"
         }
     }
     catch {
-        Write-Warning "Erro ao remover lock: $_"
+        Write-Warning "Error removing lock: $_"
     }
 }
 
 function Test-Administrator {
     <#
     .SYNOPSIS
-        Verifica se o script está sendo executado com privilégios de administrador
+        Checks if the script is being executed with administrator privileges
     #>
     $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
     return $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -239,29 +239,29 @@ function Test-Administrator {
 function Get-ScriptFullPath {
     <#
     .SYNOPSIS
-        Obtém o caminho completo do script principal com fallbacks
+        Gets the full path of the main script with fallbacks
 
     .DESCRIPTION
-        Tenta múltiplas estratégias para obter o caminho do script principal (Start-LastWar.ps1),
-        garantindo compatibilidade em diferentes contextos de execução.
+        Tries multiple strategies to obtain the path of the main script (Start-LastWar.ps1),
+        ensuring compatibility in different execution contexts.
 
-        IMPORTANTE: Usa $script:MAIN_SCRIPT_PATH quando disponível, que é definido no
-        Start-LastWar.ps1 antes de fazer dot-source do Functions.ps1. Isso garante que
-        sempre retorne o caminho do script principal, não do Functions.ps1.
+        IMPORTANT: Uses $script:MAIN_SCRIPT_PATH when available, which is defined in
+        Start-LastWar.ps1 before dot-sourcing Functions.ps1. This ensures that it
+        always returns the path of the main script, not Functions.ps1.
     #>
-    # Usa MAIN_SCRIPT_PATH se foi definido pelo script principal
+    # Use MAIN_SCRIPT_PATH if it was defined by the main script
     if ($script:MAIN_SCRIPT_PATH) {
         return $script:MAIN_SCRIPT_PATH
     }
-    # Fallback para PSCommandPath (contexto de testes ou execução direta)
+    # Fallback to PSCommandPath (test context or direct execution)
     elseif ($PSCommandPath) {
         return $PSCommandPath
     }
-    # Fallback para MyInvocation (contextos mais antigos)
+    # Fallback to MyInvocation (older contexts)
     elseif ($MyInvocation.MyCommand.Path) {
         return $MyInvocation.MyCommand.Path
     }
-    # Último fallback: constrói caminho baseado no diretório
+    # Last fallback: construct path based on directory
     else {
         return Join-Path -Path $script:REGEDIT_ROOT -ChildPath "Start-LastWar.ps1"
     }
@@ -270,30 +270,30 @@ function Get-ScriptFullPath {
 function Build-ElevatedProcessArguments {
     <#
     .SYNOPSIS
-        Constrói a lista de argumentos para o processo elevado
+        Builds the argument list for the elevated process
 
     .PARAMETER ScriptPath
-        Caminho completo do script a ser executado
+        Full path of the script to be executed
 
-    .PARAMETER Conta
-        Nome da conta
+    .PARAMETER Account
+        Account name
 
     .PARAMETER MaxBackups
-        Número máximo de backups
+        Maximum number of backups
 
     .PARAMETER BoundParameters
-        Parâmetros bound do cmdlet original
+        Bound parameters from the original cmdlet
     #>
     param(
         [string]$ScriptPath,
-        [string]$Conta,
+        [string]$Account,
         [int]$MaxBackups,
         [hashtable]$BoundParameters
     )
 
     $argList = @("-NoProfile")
 
-    # Adiciona -NoExit se Verbose estiver ativo (para manter janela aberta e ver as mensagens)
+    # Add -NoExit if Verbose is active (to keep window open and see messages)
     if ($BoundParameters['Verbose']) {
         $argList += "-NoExit"
     }
@@ -301,7 +301,7 @@ function Build-ElevatedProcessArguments {
     $argList += @(
         "-ExecutionPolicy", "Bypass"
         "-File", '"{0}"' -f $ScriptPath
-        "-Conta", '"{0}"' -f $Conta
+        "-Account", '"{0}"' -f $Account
         "-MaxBackups", $MaxBackups
     )
 
@@ -319,67 +319,67 @@ function Build-ElevatedProcessArguments {
 function Show-ElevationPrompt {
     <#
     .SYNOPSIS
-        Exibe mensagem informativa sobre a elevação de privilégios
+        Displays informative message about privilege elevation
     #>
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Yellow
-    Write-Host "  Elevação de Privilégios Necessária" -ForegroundColor Yellow
+    Write-Host "  Privilege Elevation Required" -ForegroundColor Yellow
     Write-Host "========================================" -ForegroundColor Yellow
     Write-Host ""
-    Write-Host "O jogo requer permissões de administrador." -ForegroundColor Cyan
-    Write-Host "Solicitando elevação..." -ForegroundColor Cyan
+    Write-Host "The game requires administrator permissions." -ForegroundColor Cyan
+    Write-Host "Requesting elevation..." -ForegroundColor Cyan
     Write-Host ""
 }
 
 function Request-Elevation {
     [CmdletBinding()]
     param (
-        [string]$Conta,
+        [string]$Account,
         [int]$MaxBackups,
         [hashtable]$BoundParameters
     )
 
     <#
     .SYNOPSIS
-        Solicita elevação de privilégios e relança o script como administrador
+        Requests privilege elevation and relaunches the script as administrator
 
-    .PARAMETER Conta
-        Nome da conta que está sendo carregada
+    .PARAMETER Account
+        Name of the account being loaded
 
     .PARAMETER MaxBackups
-        Número máximo de backups
+        Maximum number of backups
 
     .PARAMETER BoundParameters
-        Parâmetros bound do cmdlet original
+        Bound parameters from the original cmdlet
     #>
 
     Show-ElevationPrompt
 
     try {
         $scriptFullPath = Get-ScriptFullPath
-        Write-Verbose "Caminho do script para elevação: $scriptFullPath"
+        Write-Verbose "Script path for elevation: $scriptFullPath"
 
         $argList = Build-ElevatedProcessArguments `
             -ScriptPath $scriptFullPath `
-            -Conta $Conta `
+            -Account $Account `
             -MaxBackups $MaxBackups `
             -BoundParameters $BoundParameters
 
-        Write-Verbose "Argumentos para processo elevado: $($argList -join ' ')"
+        Write-Verbose "Arguments for elevated process: $($argList -join ' ')"
 
         $process = Start-Process -FilePath "pwsh.exe" -ArgumentList $argList -Verb RunAs -PassThru
-        Write-Verbose "Processo elevado iniciado com PID: $($process.Id)"
+        Write-Verbose "Elevated process started with PID: $($process.Id)"
 
         exit 0
     }
     catch {
         Write-Host ""
         Write-Host "========================================" -ForegroundColor Red
-        Write-Host "  ERRO" -ForegroundColor Red
+        Write-Host "  ERROR" -ForegroundColor Red
         Write-Host "========================================" -ForegroundColor Red
-        Write-Host "Falha ao elevar privilégios: $_" -ForegroundColor Red
+        Write-Host "Failed to elevate privileges: $_" -ForegroundColor Red
         Write-Host ""
-        Write-Host "O script precisa ser executado como administrador." -ForegroundColor Yellow
+        Write-Host "The script needs to be run as administrator." -ForegroundColor Yellow
         Write-Host ""
         Start-Sleep -Seconds 5
         exit 1
@@ -389,75 +389,75 @@ function Request-Elevation {
 function Initialize-NewAccount {
     [CmdletBinding()]
     param (
-        [string]$Conta
+        [string]$Account
     )
 
     <#
     .SYNOPSIS
-        Inicializa uma nova conta que ainda não existe
+        Initializes a new account that does not yet exist
 
     .DESCRIPTION
-        Verifica se há arquivo Initial.reg para usar como template.
-        Se existir, copia para a nova conta.
-        Se não existir, retorna $null (indicando que import deve ser pulado).
+        Checks if there is an Initial.reg file to use as a template.
+        If it exists, copies it to the new account.
+        If it does not exist, returns $null (indicating that import should be skipped).
 
-    .PARAMETER Conta
-        Nome da nova conta a ser criada
+    .PARAMETER Account
+        Name of the new account to be created
 
     .OUTPUTS
-        Caminho do arquivo .reg criado, ou $null se deve pular import
+        Path of the created .reg file, or $null if import should be skipped
     #>
 
     $accountsPath = Join-Path -Path $script:REGEDIT_ROOT -ChildPath "Accounts"
-    $accountFile = Join-Path -Path $accountsPath -ChildPath ("{0}.reg" -f $Conta)
+    $accountFile = Join-Path -Path $accountsPath -ChildPath ("{0}.reg" -f $Account)
 
-    # Verifica se conta já existe (segurança adicional)
+    # Check if account already exists (additional safety)
     if (Test-Path $accountFile) {
-        throw "Conta '{0}' já existe em: {1}" -f $Conta, $accountFile
+        throw "Account '{0}' already exists at: {1}" -f $Account, $accountFile
     }
 
-    # Verifica se existe Initial.reg como template
+    # Check if Initial.reg exists as template
     $initialFile = Join-Path -Path $accountsPath -ChildPath "Initial.reg"
 
     if (Test-Path $initialFile) {
-        Write-Host ("Usando Initial.reg como base para nova conta '{0}'" -f $Conta) -ForegroundColor Cyan
+        Write-Host ("Using Initial.reg as base for new account '{0}'" -f $Account) -ForegroundColor Cyan
         Copy-Item $initialFile $accountFile -Force
-        Write-Verbose ("Template copiado: {0} -> {1}" -f $initialFile, $accountFile)
+        Write-Verbose ("Template copied: {0} -> {1}" -f $initialFile, $accountFile)
         return $accountFile
     }
     else {
-        Write-Warning "Initial.reg não encontrado. Conta será criada do zero."
-        Write-Host ("Configure a nova conta '{0}' dentro do jogo. Ao sair, as configurações serão salvas em '{1}'" -f $Conta, $accountFile) -ForegroundColor Yellow
-        return $null  # Sinaliza para pular import
+        Write-Warning "Initial.reg not found. Account will be created from scratch."
+        Write-Host ("Configure the new account '{0}' inside the game. When you exit, the settings will be saved to '{1}'" -f $Account, $accountFile) -ForegroundColor Yellow
+        return $null  # Signals to skip import
     }
 }
 
 function Initialize-Workspace {
     <#
     .SYNOPSIS
-        Inicializa o workspace e valida arquivo de conta existente
+        Initializes the workspace and validates existing account file
 
-    .PARAMETER Conta
-        Nome da conta a ser carregada
+    .PARAMETER Account
+        Name of the account to be loaded
 
     .PARAMETER IsNewAccount
-        Se $true, trata como criação de nova conta
+        If $true, treats as new account creation
 
     .OUTPUTS
-        Caminho do arquivo .reg, ou $null se deve pular import (apenas para contas novas)
+        Path of the .reg file, or $null if import should be skipped (only for new accounts)
     #>
     param (
-        [string]$Conta,
+        [string]$Account,
         [bool]$IsNewAccount = $false
     )
 
     if ($IsNewAccount) {
-        return Initialize-NewAccount -Conta $Conta
+        return Initialize-NewAccount -Account $Account
     }
 
-    $regFilePath = Join-Path -Path $script:REGEDIT_ROOT -ChildPath "Accounts" -AdditionalChildPath ("{0}.reg" -f $Conta)
+    $regFilePath = Join-Path -Path $script:REGEDIT_ROOT -ChildPath "Accounts" -AdditionalChildPath ("{0}.reg" -f $Account)
     if (-not (Test-Path $regFilePath)) {
-        throw "Arquivo de registro não encontrado: {0}" -f $regFilePath
+        throw "Registry file not found: {0}" -f $regFilePath
     }
 
     return $regFilePath
@@ -466,27 +466,27 @@ function Initialize-Workspace {
 function Test-BackupNeeded {
     <#
     .SYNOPSIS
-        Verifica se um novo backup é necessário comparando com o mais recente
+        Checks if a new backup is needed by comparing with the most recent one
 
     .PARAMETER SourceFile
-        Arquivo fonte a ser verificado
+        Source file to be checked
 
     .PARAMETER BackupFolder
-        Pasta onde estão os backups
+        Folder where backups are stored
 
-    .PARAMETER Conta
-        Nome da conta para filtrar backups
+    .PARAMETER Account
+        Account name to filter backups
 
     .OUTPUTS
-        $true se backup é necessário, $false se arquivo é idêntico ao último backup
+        $true if backup is needed, $false if file is identical to the last backup
     #>
     param(
         [string]$SourceFile,
         [string]$BackupFolder,
-        [string]$Conta
+        [string]$Account
     )
 
-    $latestBackup = Get-ChildItem -Path $BackupFolder -Filter "Backup_${Conta}_*.reg" -ErrorAction SilentlyContinue |
+    $latestBackup = Get-ChildItem -Path $BackupFolder -Filter "Backup_${Account}_*.reg" -ErrorAction SilentlyContinue |
         Sort-Object LastWriteTime -Descending |
         Select-Object -First 1
 
@@ -499,15 +499,15 @@ function Test-BackupNeeded {
         $hashLatest = Get-FileHash -Path $latestBackup.FullName -Algorithm SHA256
 
         if ($hashSource.Hash -eq $hashLatest.Hash) {
-            Write-Host ("Arquivo atual é idêntico ao backup mais recente ({0}). Pulando criação de backup." -f $latestBackup.Name)
+            Write-Host ("Current file is identical to the most recent backup ({0}). Skipping backup creation." -f $latestBackup.Name)
             return $false
         }
 
         return $true
     }
     catch {
-        Write-Warning "Não foi possível comparar hashes dos arquivos: $_"
-        return $true  # Em caso de erro, cria o backup por segurança
+        Write-Warning "Could not compare file hashes: $_"
+        return $true  # In case of error, create the backup for safety
     }
 }
 
@@ -515,83 +515,83 @@ function Remove-OldBackups {
     [CmdletBinding()]
     param(
         [string]$BackupFolder,
-        [string]$Conta,
+        [string]$Account,
         [int]$MaxBackups
     )
 
     <#
     .SYNOPSIS
-        Remove backups antigos mantendo apenas os N mais recentes
+        Removes old backups keeping only the N most recent
 
     .PARAMETER BackupFolder
-        Pasta onde estão os backups
+        Folder where backups are stored
 
-    .PARAMETER Conta
-        Nome da conta para filtrar backups
+    .PARAMETER Account
+        Account name to filter backups
 
     .PARAMETER MaxBackups
-        Número máximo de backups a manter
+        Maximum number of backups to keep
     #>
 
-    $oldBackups = Get-ChildItem -Path $BackupFolder -Filter "Backup_${Conta}_*.reg" |
+    $oldBackups = Get-ChildItem -Path $BackupFolder -Filter "Backup_${Account}_*.reg" |
         Sort-Object LastWriteTime -Descending |
         Select-Object -Skip $MaxBackups
 
     if ($oldBackups) {
         $oldBackups | Remove-Item -Force
-        Write-Verbose ("Removidos {0} backups antigos" -f $oldBackups.Count)
+        Write-Verbose ("Removed {0} old backups" -f $oldBackups.Count)
     }
 }
 
 function New-RegistryBackup {
     <#
     .SYNOPSIS
-        Cria backup do arquivo de registro da conta
+        Creates backup of the account's registry file
 
     .PARAMETER Path
-        Caminho base onde criar a pasta de backups
+        Base path where to create the backups folder
 
-    .PARAMETER Conta
-        Nome da conta
+    .PARAMETER Account
+        Account name
 
     .PARAMETER SourceFile
-        Arquivo fonte a ser copiado
+        Source file to be copied
 
     .PARAMETER MaxBackups
-        Número máximo de backups a manter
+        Maximum number of backups to keep
     #>
     param (
         [string]$Path,
-        [string]$Conta,
+        [string]$Account,
         [string]$SourceFile,
         [int]$MaxBackups
     )
 
-    # Cria pasta de backup
-    $backupFolder = Join-Path -Path $Path -ChildPath "Backups" -AdditionalChildPath $Conta
+    # Create backup folder
+    $backupFolder = Join-Path -Path $Path -ChildPath "Backups" -AdditionalChildPath $Account
     if (-not (Test-Path $backupFolder)) {
         New-Item -ItemType Directory -Path $backupFolder -Force | Out-Null
     }
 
-    # Verifica se backup é necessário
-    if (-not (Test-BackupNeeded -SourceFile $SourceFile -BackupFolder $backupFolder -Conta $Conta)) {
+    # Check if backup is needed
+    if (-not (Test-BackupNeeded -SourceFile $SourceFile -BackupFolder $backupFolder -Account $Account)) {
         return
     }
 
-    # Cria backup com timestamp
+    # Create backup with timestamp
     $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-    $backupPath = Join-Path -Path $backupFolder -ChildPath "Backup_${Conta}_${timestamp}.reg"
+    $backupPath = Join-Path -Path $backupFolder -ChildPath "Backup_${Account}_${timestamp}.reg"
 
     try {
-        Write-Host "Fazendo backup do arquivo atual em: $backupPath"
+        Write-Host "Backing up current file to: $backupPath"
         Copy-Item -Path $SourceFile -Destination $backupPath -Force
-        Write-Host "Backup realizado com sucesso"
+        Write-Host "Backup completed successfully"
 
-        # Remove backups antigos
-        Remove-OldBackups -BackupFolder $backupFolder -Conta $Conta -MaxBackups $MaxBackups
+        # Remove old backups
+        Remove-OldBackups -BackupFolder $backupFolder -Account $Account -MaxBackups $MaxBackups
     }
     catch {
-        Write-Warning "Não foi possível fazer o backup: $_"
+        Write-Warning "Could not create backup: $_"
     }
 }
 
@@ -616,31 +616,31 @@ function Invoke-RegistryCommand {
 
     <#
     .SYNOPSIS
-        Executa comandos reg.exe com tratamento de erro padronizado
+        Executes reg.exe commands with standardized error handling
 
     .PARAMETER Operation
-        A operação a executar (import, export, delete)
+        The operation to execute (import, export, delete)
 
     .PARAMETER Arguments
-        Array de argumentos para passar ao reg.exe
+        Array of arguments to pass to reg.exe
 
     .PARAMETER SuccessMessage
-        Mensagem a exibir em caso de sucesso
+        Message to display on success
 
     .PARAMETER ErrorContext
-        Contexto do erro para mensagens mais claras
+        Error context for clearer messages
 
     .PARAMETER ContinueOnError
-        Se especificado, não lança exceção em caso de erro (apenas exibe warning)
+        If specified, does not throw exception on error (only displays warning)
 
     .OUTPUTS
-        Retorna $true se sucesso, $false se falhar com ContinueOnError, lança exceção caso contrário
+        Returns $true if success, $false if fails with ContinueOnError, throws exception otherwise
     #>
 
     try {
-        # Log do comando sendo executado
+        # Log the command being executed
         $commandLine = "reg {0} {1}" -f $Operation, ($Arguments -join ' ')
-        Write-Verbose ("Executando: {0}" -f $commandLine)
+        Write-Verbose ("Executing: {0}" -f $commandLine)
 
         $result = & reg $Operation @Arguments 2>&1
 
@@ -649,7 +649,7 @@ function Invoke-RegistryCommand {
             return $true
         }
         else {
-            $errorMessage = ("reg {0} retornou erro (código {1}): {2}" -f $Operation, $LASTEXITCODE, $result)
+            $errorMessage = ("reg {0} returned error (code {1}): {2}" -f $Operation, $LASTEXITCODE, $result)
 
             if ($ContinueOnError) {
                 Write-Verbose ("{0}: {1}" -f $ErrorContext, $errorMessage)
@@ -678,23 +678,23 @@ function Import-GameRegistry {
         [string]$RegFilePath
     )
 
-    Write-Host "Limpando registro anterior..."
+    Write-Host "Cleaning previous registry..."
 
-    # Deleta a chave do registro para garantir clean slate (evita acúmulo de valores)
+    # Delete the registry key to ensure clean slate (avoids value accumulation)
     Invoke-RegistryCommand `
         -Operation 'delete' `
         -Arguments @($script:REGISTRY_PATH, '/f') `
-        -SuccessMessage "Registro limpo com sucesso" `
-        -ErrorContext "Aviso: Não foi possível limpar o registro (pode não existir)" `
+        -SuccessMessage "Registry cleaned successfully" `
+        -ErrorContext "Warning: Could not clean registry (may not exist)" `
         -ContinueOnError
 
-    Write-Host "Importando configurações do registro..."
+    Write-Host "Importing registry settings..."
 
     Invoke-RegistryCommand `
         -Operation 'import' `
         -Arguments @($RegFilePath) `
-        -SuccessMessage "Configurações importadas com sucesso" `
-        -ErrorContext "Erro ao importar configurações"
+        -SuccessMessage "Settings imported successfully" `
+        -ErrorContext "Error importing settings"
 }
 
 function Export-GameRegistry {
@@ -702,96 +702,96 @@ function Export-GameRegistry {
         [string]$RegFilePath
     )
 
-    Write-Host "Atualizando arquivo de registro com as novas configurações..."
+    Write-Host "Updating registry file with new settings..."
 
     Invoke-RegistryCommand `
         -Operation 'export' `
         -Arguments @($script:REGISTRY_PATH, $RegFilePath, '/y') `
-        -SuccessMessage "Configurações salvas com sucesso" `
-        -ErrorContext "Erro ao salvar configurações"
+        -SuccessMessage "Settings saved successfully" `
+        -ErrorContext "Error saving settings"
 }
 
 function Find-GameProcess {
     [CmdletBinding()]
     param()
 
-    # Aguarda até encontrar o processo do jogo
+    # Wait until game process is found
     $maxAttempts = $script:GAME_PROCESS_TIMEOUT_SECONDS
     $attempt = 0
     $gameProcess = $null
 
-    Write-Verbose "Procurando processo do jogo (timeout: $maxAttempts segundos)..."
+    Write-Verbose "Looking for game process (timeout: $maxAttempts seconds)..."
 
     while ($attempt -lt $maxAttempts) {
-        # Procura por LastWar.exe (excluindo LastWarLauncher.exe)
+        # Look for LastWar.exe (excluding LastWarLauncher.exe)
         $gameProcess = Get-Process -Name "LastWar" -ErrorAction SilentlyContinue | Select-Object -First 1
 
         if ($gameProcess) {
-            Write-Host ("Processo do jogo encontrado: {0}" -f $gameProcess.Path)
+            Write-Host ("Game process found: {0}" -f $gameProcess.Path)
             return $gameProcess
         }
 
-        # Mostra progresso periodicamente
+        # Show progress periodically
         if (($attempt % $script:VERBOSE_STATUS_INTERVAL_SECONDS) -eq 0 -and $attempt -gt 0) {
-            Write-Verbose "Ainda aguardando processo do jogo... ($attempt/$maxAttempts segundos)"
+            Write-Verbose "Still waiting for game process... ($attempt/$maxAttempts seconds)"
         }
 
         Start-Sleep -Seconds 1
         $attempt++
     }
 
-    throw "Não foi possível encontrar o processo do jogo após $maxAttempts segundos"
+    throw "Could not find the game process after $maxAttempts seconds"
 }
 
 function Start-GameProcess {
     [CmdletBinding()]
     param()
 
-    Write-Host "Iniciando The Last War..."
+    Write-Host "Starting The Last War..."
     try {
-        # Inicia o launcher
+        # Start the launcher
         Start-Process -FilePath $script:LAUNCHER_PATH -PassThru | Out-Null
-        Write-Host "Launcher iniciado, procurando processo do jogo..."
+        Write-Host "Launcher started, looking for game process..."
 
-        # Encontra o processo real do jogo
+        # Find the actual game process
         $gameProcess = Find-GameProcess
 
-        Write-Host "Aguardando o jogo fechar..."
+        Write-Host "Waiting for game to close..."
         $gameProcess.WaitForExit()
 
-        # Aguarda um pouco para garantir que operações de escrita no registro sejam finalizadas
+        # Wait a bit to ensure registry write operations are finished
         Start-Sleep -Seconds $script:REGISTRY_WRITE_GRACE_PERIOD_SECONDS
     }
     catch {
-        throw "Erro ao iniciar/monitorar o jogo: $_"
+        throw "Error starting/monitoring game: $_"
     }
 }
 
 function Invoke-AccountSwitch {
     <#
     .SYNOPSIS
-        Orquestra o fluxo completo de troca de conta
+        Orchestrates the complete account switching flow
 
     .DESCRIPTION
-        Executa o fluxo completo para trocar de conta:
-        1. Inicializa workspace e valida arquivo da conta
-        2. Cria backup do estado atual da conta (se aplicável)
-        3. Importa configurações de registro da conta (se houver)
-        4. Inicia o jogo e aguarda finalização
-        5. Exporta configurações de registro atualizadas
+        Executes the complete flow to switch accounts:
+        1. Initializes workspace and validates account file
+        2. Creates backup of current account state (if applicable)
+        3. Imports account registry settings (if available)
+        4. Starts the game and waits for termination
+        5. Exports updated registry settings
 
-    .PARAMETER Conta
-        Nome da conta a ser carregada
+    .PARAMETER Account
+        Name of the account to be loaded
 
     .PARAMETER MaxBackups
-        Número máximo de backups a manter por conta
+        Maximum number of backups to keep per account
 
     .PARAMETER IsNewAccount
-        Se $true, trata como criação de nova conta
+        If $true, treats as new account creation
     #>
     param(
         [Parameter(Mandatory)]
-        [string]$Conta,
+        [string]$Account,
 
         [Parameter(Mandatory)]
         [int]$MaxBackups,
@@ -799,55 +799,55 @@ function Invoke-AccountSwitch {
         [bool]$IsNewAccount = $false
     )
 
-    # Inicializa e verifica o ambiente
-    $regFilePath = Initialize-Workspace -Conta $Conta -IsNewAccount $IsNewAccount
+    # Initialize and check environment
+    $regFilePath = Initialize-Workspace -Account $Account -IsNewAccount $IsNewAccount
 
     if ($regFilePath) {
-        Write-Host ("Carregando conta {0} a partir de: {1}" -f $Conta, $regFilePath)
+        Write-Host ("Loading account {0} from: {1}" -f $Account, $regFilePath)
 
-        # Cria backup das configurações atuais
-        New-RegistryBackup -Path $script:REGEDIT_ROOT -Conta $Conta -SourceFile $regFilePath -MaxBackups $MaxBackups
+        # Create backup of current settings
+        New-RegistryBackup -Path $script:REGEDIT_ROOT -Account $Account -SourceFile $regFilePath -MaxBackups $MaxBackups
 
-        # Importa as configurações da conta
+        # Import account settings
         Import-GameRegistry -RegFilePath $regFilePath
 
         Start-Sleep -Seconds $script:POST_IMPORT_DELAY_SECONDS
     }
     else {
-        Write-Host ("Criando nova conta '{0}' sem template. O jogo será iniciado com configurações atuais." -f $Conta) -ForegroundColor Yellow
-        # Define caminho onde será salvo ao exportar
-        $regFilePath = Join-Path -Path $script:REGEDIT_ROOT -ChildPath "Accounts" -AdditionalChildPath ("{0}.reg" -f $Conta)
+        Write-Host ("Creating new account '{0}' without template. Game will start with current settings." -f $Account) -ForegroundColor Yellow
+        # Define path where it will be saved when exporting
+        $regFilePath = Join-Path -Path $script:REGEDIT_ROOT -ChildPath "Accounts" -AdditionalChildPath ("{0}.reg" -f $Account)
     }
 
-    # Inicia o jogo e aguarda finalizar
+    # Start game and wait for it to finish
     Start-GameProcess
 
-    # Exporta as novas configurações
+    # Export new settings
     Export-GameRegistry -RegFilePath $regFilePath
 
-    Write-Host "Processo finalizado!"
+    Write-Host "Process completed!"
     Start-Sleep -Seconds $script:REGISTRY_WRITE_GRACE_PERIOD_SECONDS
 }
 
 function Show-ErrorMessage {
     <#
     .SYNOPSIS
-        Exibe mensagem de erro formatada de forma consistente
+        Displays error message in a consistent formatted way
 
     .PARAMETER ErrorRecord
-        O registro de erro a ser exibido
+        The error record to be displayed
 
     .PARAMETER Title
-        Título da mensagem de erro (padrão: "ERRO CRÍTICO")
+        Title of the error message (default: "CRITICAL ERROR")
 
     .PARAMETER WaitForKeyPress
-        Se deve aguardar o usuário pressionar uma tecla antes de continuar
+        Whether to wait for the user to press a key before continuing
     #>
     param(
         [Parameter(Mandatory)]
         [System.Management.Automation.ErrorRecord]$ErrorRecord,
 
-        [string]$Title = "ERRO CRÍTICO",
+        [string]$Title = "CRITICAL ERROR",
 
         [switch]$WaitForKeyPress
     )
@@ -859,12 +859,12 @@ function Show-ErrorMessage {
     Write-Host ""
     Write-Host $ErrorRecord.Exception.Message -ForegroundColor Red
     Write-Host ""
-    Write-Host "Detalhes técnicos:" -ForegroundColor Yellow
+    Write-Host "Technical details:" -ForegroundColor Yellow
     Write-Host $ErrorRecord.ScriptStackTrace -ForegroundColor Gray
     Write-Host ""
 
     if ($WaitForKeyPress) {
-        Write-Host "Pressione qualquer tecla para fechar..." -ForegroundColor Cyan
+        Write-Host "Press any key to close..." -ForegroundColor Cyan
         $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
     }
 }

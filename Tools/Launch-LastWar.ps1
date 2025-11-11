@@ -1,6 +1,7 @@
 ﻿param(
     [Parameter(Position = 0)]
-    [string]$Conta = "Vlad"
+    [Alias('Conta')]  # Portuguese alias for backwards compatibility
+    [string]$Account = "Vlad"
 )
 
 $ErrorActionPreference = "Stop"
@@ -15,12 +16,12 @@ try {
 
     # Log start
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    "[$timestamp] Starting LastWar with account: $Conta" | Out-File -FilePath $logPath
+    "[$timestamp] Starting LastWar with account: $Account" | Out-File -FilePath $logPath
 
     # Run the main script
     # Output is shown on screen AND captured via transcript
     Start-Transcript -Path $logPath -Append
-    & $scriptPath -Conta $Conta -Verbose
+    & $scriptPath -Account $Account -Verbose
     Stop-Transcript
 }
 catch {

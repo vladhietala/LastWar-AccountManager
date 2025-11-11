@@ -1,30 +1,30 @@
 BeforeAll {
-    # Import apenas das funções, sem executar o script completo
+    # Import only the functions, without executing the complete script
     . "$PSScriptRoot\..\Start-LastWar.Functions.ps1"
 }
 
 Describe "Test-Administrator" {
-    Context "Verificação de privilégios" {
-        It "Deve retornar um valor booleano" {
+    Context "Privilege verification" {
+        It "Should return a boolean value" {
             $result = Test-Administrator
             $result | Should -BeOfType [bool]
         }
 
-        It "Deve retornar true ou false sem erro" {
+        It "Should return true or false without error" {
             { Test-Administrator } | Should -Not -Throw
         }
     }
 }
 
 Describe "Get-ScriptFullPath" {
-    Context "Quando PSCommandPath está disponível" {
-        It "Deve retornar caminho absoluto" {
+    Context "When PSCommandPath is available" {
+        It "Should return absolute path" {
             $result = Get-ScriptFullPath
             $result | Should -Not -BeNullOrEmpty
             [System.IO.Path]::IsPathRooted($result) | Should -Be $true
         }
 
-        It "Deve terminar com .ps1" {
+        It "Should end with .ps1" {
             $result = Get-ScriptFullPath
             $result | Should -Match '\.ps1$'
         }
@@ -32,83 +32,83 @@ Describe "Get-ScriptFullPath" {
 }
 
 Describe "Build-ElevatedProcessArguments" {
-    Context "Argumentos básicos" {
-        It "Deve incluir parâmetros obrigatórios" {
+    Context "Basic arguments" {
+        It "Should include mandatory parameters" {
             $argList = Build-ElevatedProcessArguments `
                 -ScriptPath "C:\Test\Script.ps1" `
-                -Conta "TestAccount" `
+                -Account "TestAccount" `
                 -MaxBackups 10 `
                 -BoundParameters @{}
 
             $argList | Should -Contain "-NoProfile"
             $argList | Should -Contain "-ExecutionPolicy"
             $argList | Should -Contain "Bypass"
-            # -File vem junto com o caminho: '-File "C:\Test\Script.ps1"'
+            # -File comes with the path: '-File "C:\Test\Script.ps1"'
             $argList | Should -Contain '-File "C:\Test\Script.ps1"'
-            # -Conta vem junto com o valor: '-Conta "TestAccount"'
-            $argList | Should -Contain '-Conta "TestAccount"'
+            # -Account comes with the value: '-Account "TestAccount"'
+            $argList | Should -Contain '-Account "TestAccount"'
             $argList | Should -Contain "-MaxBackups"
             $argList | Should -Contain 10
         }
 
-        It "Deve incluir caminho do script com aspas no formato correto" {
+        It "Should include script path with quotes in correct format" {
             $argList = Build-ElevatedProcessArguments `
                 -ScriptPath "C:\Test\Script.ps1" `
-                -Conta "TestAccount" `
+                -Account "TestAccount" `
                 -MaxBackups 10 `
                 -BoundParameters @{}
 
-            # A função usa formato -f para criar: '-File "path"'
+            # The function uses -f format to create: '-File "path"'
             $argList | Should -Contain '-File "C:\Test\Script.ps1"'
         }
 
-        It "Deve incluir conta com aspas no formato correto" {
+        It "Should include account with quotes in correct format" {
             $argList = Build-ElevatedProcessArguments `
                 -ScriptPath "C:\Test\Script.ps1" `
-                -Conta "TestAccount" `
+                -Account "TestAccount" `
                 -MaxBackups 10 `
                 -BoundParameters @{}
 
-            # A função usa formato -f para criar: '-Conta "name"'
-            $argList | Should -Contain '-Conta "TestAccount"'
+            # The function uses -f format to create: '-Account "name"'
+            $argList | Should -Contain '-Account "TestAccount"'
         }
     }
 
-    Context "Com parâmetro Verbose" {
-        It "Deve incluir -Verbose quando presente" {
+    Context "With Verbose parameter" {
+        It "Should include -Verbose when present" {
             $argList = Build-ElevatedProcessArguments `
                 -ScriptPath "C:\Test\Script.ps1" `
-                -Conta "TestAccount" `
+                -Account "TestAccount" `
                 -MaxBackups 10 `
                 -BoundParameters @{ Verbose = $true }
 
             $argList | Should -Contain "-Verbose"
         }
 
-        It "Deve incluir -NoExit quando Verbose presente (para manter janela aberta)" {
+        It "Should include -NoExit when Verbose present (to keep window open)" {
             $argList = Build-ElevatedProcessArguments `
                 -ScriptPath "C:\Test\Script.ps1" `
-                -Conta "TestAccount" `
+                -Account "TestAccount" `
                 -MaxBackups 10 `
                 -BoundParameters @{ Verbose = $true }
 
             $argList | Should -Contain "-NoExit"
         }
 
-        It "Não deve incluir -Verbose quando ausente" {
+        It "Should not include -Verbose when absent" {
             $argList = Build-ElevatedProcessArguments `
                 -ScriptPath "C:\Test\Script.ps1" `
-                -Conta "TestAccount" `
+                -Account "TestAccount" `
                 -MaxBackups 10 `
                 -BoundParameters @{}
 
             $argList | Should -Not -Contain "-Verbose"
         }
 
-        It "Não deve incluir -NoExit quando Verbose ausente" {
+        It "Should not include -NoExit when Verbose absent" {
             $argList = Build-ElevatedProcessArguments `
                 -ScriptPath "C:\Test\Script.ps1" `
-                -Conta "TestAccount" `
+                -Account "TestAccount" `
                 -MaxBackups 10 `
                 -BoundParameters @{}
 
@@ -124,21 +124,21 @@ Describe "Initialize-Workspace" {
         New-Item -ItemType Directory -Path $script:TestAccountsFolder -Force | Out-Null
     }
 
-    Context "Quando arquivo de conta existe" {
-        It "Deve retornar caminho do arquivo" {
+    Context "When account file exists" {
+        It "Should return file path" {
             $testFile = Join-Path -Path $script:TestAccountsFolder -ChildPath "TestAccount.reg"
             "Test content" | Set-Content -Path $testFile -Force
 
-            $result = Initialize-Workspace -Conta "TestAccount"
+            $result = Initialize-Workspace -Account "TestAccount"
 
             $result | Should -Be $testFile
             Test-Path $result | Should -Be $true
         }
     }
 
-    Context "Quando arquivo de conta não existe" {
-        It "Deve lançar exceção" {
-            { Initialize-Workspace -Conta "NonExistent" } | Should -Throw "*não encontrado*"
+    Context "When account file does not exist" {
+        It "Should throw exception" {
+            { Initialize-Workspace -Account "NonExistent" } | Should -Throw "*not found*"
         }
     }
 
@@ -150,8 +150,8 @@ Describe "Initialize-Workspace" {
 }
 
 Describe "Show-ErrorMessage" {
-    Context "Formatação de erro" {
-        It "Não deve lançar exceção ao mostrar erro" {
+    Context "Error formatting" {
+        It "Should not throw exception when showing error" {
             try {
                 throw "Test error"
             }
@@ -160,7 +160,7 @@ Describe "Show-ErrorMessage" {
             }
         }
 
-        It "Deve aceitar título customizado" {
+        It "Should accept custom title" {
             try {
                 throw "Test error"
             }

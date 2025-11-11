@@ -2,39 +2,39 @@
 
 <#
 .SYNOPSIS
-    Cria atalhos no Start Menu para todas as contas do LastWar Account Manager
+    Creates Start Menu shortcuts for all LastWar Account Manager accounts
 
 .DESCRIPTION
-    Este script descobre automaticamente todas as contas na pasta Accounts/
-    e cria atalhos no Start Menu do Windows para acesso rápido.
+    This script automatically discovers all accounts in the Accounts/ folder
+    and creates shortcuts in the Windows Start Menu for quick access.
 
-    Os atalhos são criados em: Start Menu\Programs\FunFly\
+    Shortcuts are created in: Start Menu\Programs\FunFly\
 
-    Ao mover o repositório, basta executar este script novamente para
-    atualizar todos os atalhos com os novos caminhos.
+    When moving the repository, just run this script again to
+    update all shortcuts with the new paths.
 
 .PARAMETER IconPath
-    Caminho opcional para um ícone personalizado (.ico)
+    Optional path to a custom icon (.ico)
 
 .PARAMETER PinToStart
-    Tenta fixar os atalhos no Start Menu (Windows 10/11)
-    NOTA: Pode não funcionar devido a restrições do Windows
+    Attempts to pin shortcuts to the Start Menu (Windows 10/11)
+    NOTE: May not work due to Windows restrictions
 
 .EXAMPLE
     .\Create-Shortcuts.ps1
-    Cria atalhos para todas as contas descobertas
+    Creates shortcuts for all discovered accounts
 
 .EXAMPLE
     .\Create-Shortcuts.ps1 -IconPath "C:\Icons\game.ico"
-    Cria atalhos com ícone personalizado
+    Creates shortcuts with custom icon
 
 .EXAMPLE
     .\Create-Shortcuts.ps1 -PinToStart
-    Cria atalhos e tenta fixá-los no Start Menu
+    Creates shortcuts and attempts to pin them to Start Menu
 
 .NOTES
-    Autor: Vlad
-    Última Atualização: 08/11/2025
+    Author: Vlad
+    Last Updated: 11/08/2025
 #>
 
 [CmdletBinding()]
@@ -44,7 +44,7 @@ param (
     [switch]$PinToStart
 )
 
-# Constantes
+# Constants
 $script:REPO_PATH = $PSScriptRoot
 $script:LAUNCH_SCRIPT = Join-Path -Path $script:REPO_PATH -ChildPath "Start-LastWar.ps1"
 $script:PWSH_PATH = "C:\Program Files\PowerShell\7\pwsh.exe"
@@ -54,16 +54,16 @@ $script:ACCOUNTS_FOLDER = Join-Path -Path $script:REPO_PATH -ChildPath "Accounts
 function Get-AccountList {
     <#
     .SYNOPSIS
-        Descobre todas as contas disponíveis na pasta Accounts/
+        Discovers all available accounts in the Accounts/ folder
 
     .DESCRIPTION
-        Exclui arquivos template como "Initial.reg" que não são contas reais
+        Excludes template files like "Initial.reg" that are not real accounts
     #>
     if (-not (Test-Path $script:ACCOUNTS_FOLDER)) {
-        throw "Pasta de contas não encontrada: $script:ACCOUNTS_FOLDER"
+        throw "Accounts folder not found: $script:ACCOUNTS_FOLDER"
     }
 
-    # Templates que devem ser ignorados
+    # Templates that should be ignored
     $excludedTemplates = @("Initial")
 
     $accounts = Get-ChildItem -Path $script:ACCOUNTS_FOLDER -Filter "*.reg" |
@@ -72,7 +72,7 @@ function Get-AccountList {
                 Sort-Object
 
     if ($accounts.Count -eq 0) {
-        throw "Nenhuma conta encontrada em: $script:ACCOUNTS_FOLDER"
+        throw "No accounts found in: $script:ACCOUNTS_FOLDER"
     }
 
     return $accounts
@@ -81,21 +81,21 @@ function Get-AccountList {
 function Set-ShortcutPinToStart {
     <#
     .SYNOPSIS
-        Tenta fixar um atalho no Start Menu
+        Attempts to pin a shortcut to the Start Menu
 
     .PARAMETER ShortcutPath
-        Caminho completo do atalho .lnk
+        Full path of the .lnk shortcut
 
     .NOTES
-        No Windows 10/11, a Microsoft bloqueou a API "Pin to Start" programaticamente por segurança.
-        A chamada verb.DoIt() retorna E_ACCESSDENIED (0x80070005) mesmo quando o verb existe.
-        A única forma de fixar é manualmente pelo usuário.
+        On Windows 10/11, Microsoft blocked the "Pin to Start" API programmatically for security.
+        The verb.DoIt() call returns E_ACCESSDENIED (0x80070005) even when the verb exists.
+        The only way to pin is manually by the user.
 
-        Nota sobre idiomas:
-        - Os nomes dos verbs dependem do idioma do Windows
-        - O caractere & indica o atalho de teclado (ex: "Unpi&n from Start")
-        - A função remove o & antes de fazer a comparação
-        - Suporta EN-US ("Pin to Start") e PT-BR ("Fixar no Iniciar")
+        Note about languages:
+        - Verb names depend on the Windows language
+        - The & character indicates the keyboard shortcut (e.g., "Unpi&n from Start")
+        - The function removes & before comparison
+        - Supports EN-US ("Pin to Start") and PT-BR ("Fixar no Iniciar")
     #>
     param (
         [Parameter(Mandatory)]
@@ -110,18 +110,18 @@ function Set-ShortcutPinToStart {
         $folderObj = $shell.NameSpace($folder)
         $fileObj = $folderObj.ParseName($file)
 
-        # Verifica se o atalho já está pinado
-        # Nota: & é usado para atalhos de teclado (ex: "Unpi&n from Start")
+        # Check if shortcut is already pinned
+        # Note: & is used for keyboard shortcuts (e.g., "Unpi&n from Start")
         $unpinVerb = $fileObj.Verbs() | Where-Object {
             $_.Name -replace '&', '' -match 'Unpin from Start|Desafixar do Iniciar|Unpin from taskbar'
         }
         if ($unpinVerb) {
-            Write-Host "    ✓ Atalho já está fixado no Start Menu" -ForegroundColor Green
+            Write-Host "    ✓ Shortcut is already pinned to Start Menu" -ForegroundColor Green
             return $true
         }
 
-        # Procura o verb "Pin to Start"
-        # Remove & para comparação mais confiável entre idiomas
+        # Look for "Pin to Start" verb
+        # Remove & for more reliable comparison across languages
         $pinVerb = $fileObj.Verbs() | Where-Object {
             $_.Name -replace '&', '' -match 'Pin to Start|Fixar no Iniciar'
         }
@@ -129,32 +129,32 @@ function Set-ShortcutPinToStart {
         if ($pinVerb) {
             try {
                 $pinVerb.DoIt()
-                Write-Host "    → Tentativa de fixar realizada" -ForegroundColor Cyan
+                Write-Host "    → Pin attempt made" -ForegroundColor Cyan
                 Start-Sleep -Milliseconds 500
 
-                # Verifica se realmente fixou
+                # Check if it actually pinned
                 $fileObj = $folderObj.ParseName($file)
                 $unpinCheck = $fileObj.Verbs() | Where-Object {
                     $_.Name -replace '&', '' -match 'Unpin from Start|Desafixar do Iniciar'
                 }
                 if ($unpinCheck) {
-                    Write-Host "    ✓ Atalho fixado com sucesso!" -ForegroundColor Green
+                    Write-Host "    ✓ Shortcut pinned successfully!" -ForegroundColor Green
                     return $true
                 }
             }
             catch {
-                # Erro esperado: E_ACCESSDENIED (0x80070005)
-                Write-Verbose "Erro ao fixar: $_"
+                # Expected error: E_ACCESSDENIED (0x80070005)
+                Write-Verbose "Error pinning: $_"
             }
         }
 
-        # Se chegou aqui, não conseguiu fixar automaticamente
-        Write-Host "    ⚠ Windows bloqueou fixação automática (segurança do sistema)" -ForegroundColor Yellow
-        Write-Host "      → Para fixar: Pressione Win, digite '$($file.Replace('.lnk',''))', clique direito → 'Fixar no Iniciar'" -ForegroundColor Gray
+        # If we got here, couldn't pin automatically
+        Write-Host "    ⚠ Windows blocked automatic pinning (system security)" -ForegroundColor Yellow
+        Write-Host "      → To pin: Press Win, type '$($file.Replace('.lnk',''))', right-click → 'Pin to Start'" -ForegroundColor Gray
         return $false
     }
     catch {
-        Write-Verbose "Erro ao acessar atalho: $_"
+        Write-Verbose "Error accessing shortcut: $_"
         return $false
     }
 }
@@ -162,16 +162,16 @@ function Set-ShortcutPinToStart {
 function New-AccountShortcut {
     <#
     .SYNOPSIS
-        Cria um atalho para uma conta específica
+        Creates a shortcut for a specific account
 
     .PARAMETER AccountName
-        Nome da conta para criar o atalho
+        Account name to create shortcut for
 
     .PARAMETER IconPath
-        Caminho opcional para ícone personalizado
+        Optional path to custom icon
 
     .PARAMETER PinToStart
-        Se deve tentar fixar o atalho no Start Menu
+        Whether to attempt pinning the shortcut to Start Menu
     #>
     param (
         [Parameter(Mandatory)]
@@ -182,40 +182,40 @@ function New-AccountShortcut {
         [bool]$PinToStart = $false
     )
 
-    # Cria pasta de atalhos se não existir
+    # Create shortcuts folder if it doesn't exist
     if (-not (Test-Path $script:SHORTCUTS_FOLDER)) {
         New-Item -ItemType Directory -Path $script:SHORTCUTS_FOLDER -Force | Out-Null
-        Write-Host "Pasta de atalhos criada: $script:SHORTCUTS_FOLDER" -ForegroundColor Cyan
+        Write-Host "Shortcuts folder created: $script:SHORTCUTS_FOLDER" -ForegroundColor Cyan
     }
 
     $shortcutPath = Join-Path -Path $script:SHORTCUTS_FOLDER -ChildPath "$AccountName.lnk"
 
     try {
-        # Cria objeto COM para manipular atalhos
+        # Create COM object to manipulate shortcuts
         $shell = New-Object -ComObject WScript.Shell
         $shortcut = $shell.CreateShortcut($shortcutPath)
 
-        # Configura propriedades do atalho
+        # Configure shortcut properties
         $shortcut.TargetPath = $script:PWSH_PATH
-        $shortcut.Arguments = "-nop -file `"$script:LAUNCH_SCRIPT`" -Conta `"$AccountName`""
+        $shortcut.Arguments = "-nop -file `"$script:LAUNCH_SCRIPT`" -Account `"$AccountName`""
         $shortcut.WorkingDirectory = $script:REPO_PATH
-        $shortcut.Description = "Inicia LastWar com a conta $AccountName"
-        $shortcut.WindowStyle = 1  # Normal (visível)
+        $shortcut.Description = "Start LastWar with account $AccountName"
+        $shortcut.WindowStyle = 1  # Normal (visible)
 
-        # Define ícone se fornecido
+        # Set icon if provided
         if ($IconPath -and (Test-Path $IconPath)) {
             $shortcut.IconLocation = $IconPath
         }
 
-        # Salva o atalho
+        # Save the shortcut
         $shortcut.Save()
 
-        Write-Host "  ✓ Atalho criado: $AccountName.lnk" -ForegroundColor Green
+        Write-Host "  ✓ Shortcut created: $AccountName.lnk" -ForegroundColor Green
 
-        # Libera objeto COM
+        # Release COM object
         [System.Runtime.Interopservices.Marshal]::ReleaseComObject($shell) | Out-Null
 
-        # Tenta fixar no Start Menu se solicitado
+        # Attempt to pin to Start Menu if requested
         if ($PinToStart) {
             Set-ShortcutPinToStart -ShortcutPath $shortcutPath | Out-Null
         }
@@ -223,7 +223,7 @@ function New-AccountShortcut {
         return $true
     }
     catch {
-        Write-Host "  ✗ Erro ao criar atalho para $AccountName : $_" -ForegroundColor Red
+        Write-Host "  ✗ Error creating shortcut for $AccountName : $_" -ForegroundColor Red
         return $false
     }
 }
@@ -231,10 +231,10 @@ function New-AccountShortcut {
 function Remove-OrphanedShortcuts {
     <#
     .SYNOPSIS
-        Remove atalhos órfãos (contas que não existem mais)
+        Removes orphaned shortcuts (accounts that no longer exist)
 
     .PARAMETER ValidAccounts
-        Lista de contas válidas
+        List of valid accounts
     #>
     param (
         [Parameter(Mandatory)]
@@ -250,19 +250,19 @@ function Remove-OrphanedShortcuts {
     foreach ($shortcut in $shortcuts) {
         $shortcutName = $shortcut.BaseName
 
-        # Pula o atalho Launch.lnk (atalho direto do jogo)
+        # Skip the Launch.lnk shortcut (direct game shortcut)
         if ($shortcutName -eq "Launch") {
             continue
         }
 
-        # Se o atalho não corresponde a nenhuma conta válida, remove
+        # If shortcut doesn't correspond to any valid account, remove it
         if ($shortcutName -notin $ValidAccounts) {
             try {
                 Remove-Item $shortcut.FullName -Force
-                Write-Host "  🗑 Atalho órfão removido: $shortcutName.lnk" -ForegroundColor Yellow
+                Write-Host "  🗑 Orphaned shortcut removed: $shortcutName.lnk" -ForegroundColor Yellow
             }
             catch {
-                Write-Warning "Não foi possível remover atalho órfão: $shortcutName.lnk"
+                Write-Warning "Could not remove orphaned shortcut: $shortcutName.lnk"
             }
         }
     }
@@ -276,32 +276,32 @@ try {
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Cyan
     Write-Host "  LastWar Account Manager" -ForegroundColor Cyan
-    Write-Host "  Criação de Atalhos" -ForegroundColor Cyan
+    Write-Host "  Shortcut Creation" -ForegroundColor Cyan
     Write-Host "========================================" -ForegroundColor Cyan
     Write-Host ""
 
-    # Valida pré-requisitos
-    Write-Host "Validando ambiente..." -ForegroundColor Yellow
+    # Validate prerequisites
+    Write-Host "Validating environment..." -ForegroundColor Yellow
 
     if (-not (Test-Path $script:LAUNCH_SCRIPT)) {
-        throw "Script Launch-LastWar.ps1 não encontrado em: $script:LAUNCH_SCRIPT"
+        throw "Script Start-LastWar.ps1 not found at: $script:LAUNCH_SCRIPT"
     }
 
     if (-not (Test-Path $script:PWSH_PATH)) {
-        throw "PowerShell 7 não encontrado em: $script:PWSH_PATH"
+        throw "PowerShell 7 not found at: $script:PWSH_PATH"
     }
 
-    Write-Host "✓ Ambiente validado" -ForegroundColor Green
+    Write-Host "✓ Environment validated" -ForegroundColor Green
     Write-Host ""
 
-    # Descobre contas
-    Write-Host "Descobrindo contas..." -ForegroundColor Yellow
+    # Discover accounts
+    Write-Host "Discovering accounts..." -ForegroundColor Yellow
     $accounts = Get-AccountList
-    Write-Host "✓ Encontradas $($accounts.Count) contas: $($accounts -join ', ')" -ForegroundColor Green
+    Write-Host "✓ Found $($accounts.Count) accounts: $($accounts -join ', ')" -ForegroundColor Green
     Write-Host ""
 
-    # Cria atalhos
-    Write-Host "Criando atalhos em: $script:SHORTCUTS_FOLDER" -ForegroundColor Yellow
+    # Create shortcuts
+    Write-Host "Creating shortcuts in: $script:SHORTCUTS_FOLDER" -ForegroundColor Yellow
     Write-Host ""
 
     $successCount = 0
@@ -313,22 +313,22 @@ try {
 
     Write-Host ""
 
-    # Remove atalhos órfãos
-    Write-Host "Verificando atalhos órfãos..." -ForegroundColor Yellow
+    # Remove orphaned shortcuts
+    Write-Host "Checking for orphaned shortcuts..." -ForegroundColor Yellow
     Remove-OrphanedShortcuts -ValidAccounts $accounts
     Write-Host ""
 
-    # Resumo
+    # Summary
     Write-Host "========================================" -ForegroundColor Cyan
-    Write-Host "  Resumo" -ForegroundColor Cyan
+    Write-Host "  Summary" -ForegroundColor Cyan
     Write-Host "========================================" -ForegroundColor Cyan
-    Write-Host "✓ Atalhos criados/atualizados: $successCount de $($accounts.Count)" -ForegroundColor Green
-    Write-Host "📁 Local: $script:SHORTCUTS_FOLDER" -ForegroundColor Cyan
+    Write-Host "✓ Shortcuts created/updated: $successCount of $($accounts.Count)" -ForegroundColor Green
+    Write-Host "📁 Location: $script:SHORTCUTS_FOLDER" -ForegroundColor Cyan
     Write-Host ""
     if (-not $PinToStart) {
-        Write-Host "💡 Dica: Use o parâmetro -PinToStart para tentar fixar automaticamente no Start Menu" -ForegroundColor Gray
+        Write-Host "💡 Tip: Use the -PinToStart parameter to attempt automatic pinning to Start Menu" -ForegroundColor Gray
     }
-    Write-Host "Para pesquisar rapidamente, pressione Win e digite o nome da conta." -ForegroundColor Gray
+    Write-Host "To search quickly, press Win and type the account name." -ForegroundColor Gray
     Write-Host ""
 
     Start-Sleep -Seconds 3
@@ -336,7 +336,7 @@ try {
 catch {
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Red
-    Write-Host "  ERRO" -ForegroundColor Red
+    Write-Host "  ERROR" -ForegroundColor Red
     Write-Host "========================================" -ForegroundColor Red
     Write-Host $_.Exception.Message -ForegroundColor Red
     Write-Host ""
