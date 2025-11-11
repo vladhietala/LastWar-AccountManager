@@ -157,6 +157,8 @@ Use VSCode's PowerShell debugging (F5) or run with `-Verbose` flag:
 - **Shortcuts Location**: `%APPDATA%\Microsoft\Windows\Start Menu\Programs\FirstFun\`
 - **Lock File**: `.lastwar.lock` (in repository root)
 - **Default Max Backups**: 10 per account
+- **Registry Decoder**: `Tools/ConvertFrom-RegHex.ps1` (supports Text, Detailed, and JSON output formats)
+- **Unity PlayerPrefs Hash Suffix Pattern**: `_h[0-9]+` (e.g., `_h2665564582`)
 - **GitHub Repository**: Private repository (uses SSH)
 
 ## Script Requirements
