@@ -10,8 +10,8 @@
     automaticamente.
 
 .PARAMETER Conta
-    Nome da conta a ser carregada. Valores permitidos: Vlad, Galahad, Coconut,
-    sgtPincel, Camotroni, Amanda, Nick
+    Nome da conta a ser carregada. As contas disponíveis são descobertas dinamicamente
+    da pasta Accounts/. Use tab completion para ver as opções disponíveis.
 
 .NOTES
     Estrutura de pastas:
@@ -19,7 +19,7 @@
     - Backups/  : Backups automáticos das contas
 
 .PARAMETER MaxBackups
-    Número máximo de backups a serem mantidos por conta. Padrão: 10
+    Número máximo de backups a serem mantidos por conta. Padrão: 20
 
 .EXAMPLE
     .\Start-LastWar.ps1 -Conta Vlad
@@ -32,8 +32,35 @@
 
 [CmdletBinding()]
 param (
-    [string]$Conta = 'Vlad',
-    [int]$MaxBackups = 10,
+    [Parameter(Mandatory = $true, Position = 0, HelpMessage = "Nome da conta a ser carregada")]
+    [ArgumentCompleter({
+        param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
+
+        # Descobrir contas dinamicamente da pasta Accounts
+        $accountsPath = Join-Path -Path $PSScriptRoot -ChildPath "Accounts"
+        if (Test-Path $accountsPath) {
+            Get-ChildItem -Path $accountsPath -Filter "*.reg" -File |
+                Where-Object { $_.Name -ne "Initial.reg" } |
+                ForEach-Object {
+                    $accountName = [System.IO.Path]::GetFileNameWithoutExtension($_.Name)
+                    if ($accountName -like "$wordToComplete*") {
+                        [System.Management.Automation.CompletionResult]::new(
+                            $accountName,
+                            $accountName,
+                            'ParameterValue',
+                            "Account: $accountName"
+                        )
+                    }
+                }
+        }
+    })]
+    [string]$Conta,
+
+    [Parameter(Mandatory = $false, HelpMessage = "Número máximo de backups a serem mantidos por conta")]
+    [ValidateRange(1, 100)]
+    [int]$MaxBackups = 20,
+
+    [Parameter(Mandatory = $false, HelpMessage = "Cria uma nova conta se não existir")]
     [switch]$CreateNew
 )
 
