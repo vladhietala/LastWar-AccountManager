@@ -34,6 +34,14 @@ if (-not $script:POST_IMPORT_DELAY_SECONDS) {
 if (-not $script:VERBOSE_STATUS_INTERVAL_SECONDS) {
     $script:VERBOSE_STATUS_INTERVAL_SECONDS = 10
 }
+if (-not $script:LOCK_WAIT_TIMEOUT_SECONDS) {
+    # Total time to wait for lock release during grace period and export
+    # Grace period (1s) + typical export time + buffer = ~3 seconds total
+    $script:LOCK_WAIT_TIMEOUT_SECONDS = 3
+}
+if (-not $script:LOCK_RETRY_INTERVAL_SECONDS) {
+    $script:LOCK_RETRY_INTERVAL_SECONDS = 0.5
+}
 
 function Test-GameInstallation {
     [CmdletBinding()]
@@ -140,11 +148,13 @@ function Remove-OrphanedLock {
 function Assert-NoExistingLock {
     <#
     .SYNOPSIS
-        Checks if there is an active lock and aborts execution if so
+        Checks if there is an active lock and waits for it to be released
 
     .DESCRIPTION
         Validates that no other instance of the script is running.
-        If there is, displays a detailed error message and exits the process.
+        If there is an active lock, waits for a configurable period (LOCK_WAIT_TIMEOUT_SECONDS)
+        checking periodically if the lock has been released.
+        Only exits with error if the lock is still active after timeout.
     #>
     $existingLock = Test-ScriptLock
 
@@ -152,6 +162,36 @@ function Assert-NoExistingLock {
         return  # No active lock, can continue
     }
 
+    # Found an active lock - try waiting for it to be released
+    Write-Host ""
+    Write-Host "Another instance is running. Waiting for it to finish..." -ForegroundColor Yellow
+    Write-Verbose ("Lock detected - Account: {0}, PID: {1}" -f $existingLock.AccountName, $existingLock.ProcessId)
+
+    $waitStartTime = Get-Date
+    $maxWaitTime = [TimeSpan]::FromSeconds($script:LOCK_WAIT_TIMEOUT_SECONDS)
+    $retryInterval = [TimeSpan]::FromSeconds($script:LOCK_RETRY_INTERVAL_SECONDS)
+
+    while ($true) {
+        Start-Sleep -Seconds $retryInterval.TotalSeconds
+
+        # Check if lock was released
+        $currentLock = Test-ScriptLock
+        if (-not ($currentLock -and $currentLock.IsLocked)) {
+            Write-Host "Lock released. Continuing..." -ForegroundColor Green
+            Write-Verbose "Lock was released after waiting"
+            return
+        }
+
+        # Check if we exceeded timeout
+        $elapsed = (Get-Date) - $waitStartTime
+        if ($elapsed -ge $maxWaitTime) {
+            break  # Timeout reached, show error
+        }
+
+        Write-Verbose ("Still waiting... ({0:F1}s elapsed)" -f $elapsed.TotalSeconds)
+    }
+
+    # Timeout reached and lock is still active - show error and exit
     # ConvertFrom-Json already deserializes ISO 8601 to DateTime
     $lockTime = if ($existingLock.LockTime -is [DateTime]) {
         $existingLock.LockTime
@@ -163,15 +203,16 @@ function Assert-NoExistingLock {
 
     Write-Host ""
     Write-Host "================================================" -ForegroundColor Red
-    Write-Host "ERROR: Another instance of the script is already running!" -ForegroundColor Red
+    Write-Host "ERROR: Another instance is still running after waiting!" -ForegroundColor Red
     Write-Host "================================================" -ForegroundColor Red
     Write-Host ""
     Write-Host ("Account running: {0}" -f $existingLock.AccountName) -ForegroundColor Yellow
     Write-Host ("Process ID: {0}" -f $existingLock.ProcessId) -ForegroundColor Yellow
     Write-Host ("Started at: {0}" -f $lockTime.ToString('MM/dd/yyyy HH:mm:ss')) -ForegroundColor Yellow
-    Write-Host ("Elapsed time: {0} minutes and {1} seconds" -f [Math]::Floor($duration.TotalMinutes), $duration.Seconds) -ForegroundColor Yellow
+    Write-Host ("Total elapsed time: {0} minutes and {1} seconds" -f [Math]::Floor($duration.TotalMinutes), $duration.Seconds) -ForegroundColor Yellow
     Write-Host ""
-    Write-Host "Please wait for the other instance to finish before starting a new one." -ForegroundColor Cyan
+    Write-Host "The other instance is taking longer than expected." -ForegroundColor Cyan
+    Write-Host "Please wait for it to finish before starting a new one." -ForegroundColor Cyan
     Write-Host "This prevents Export-GameRegistry from one account from overwriting" -ForegroundColor Cyan
     Write-Host "another account's .reg file incorrectly." -ForegroundColor Cyan
     Write-Host ""

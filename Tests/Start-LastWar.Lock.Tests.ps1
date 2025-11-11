@@ -220,3 +220,84 @@ Describe "Remove-ScriptLock" {
         }
     }
 }
+
+Describe "Assert-NoExistingLock" {
+    BeforeEach {
+        if (Test-Path $script:LOCK_FILE) {
+            Remove-Item $script:LOCK_FILE -Force
+        }
+        # Use shorter timeouts for faster testing
+        $script:LOCK_WAIT_TIMEOUT_SECONDS = 2
+        $script:LOCK_RETRY_INTERVAL_SECONDS = 0.3
+    }
+
+    Context "When there is no lock" {
+        It "Should not throw and continue immediately" {
+            { Assert-NoExistingLock } | Should -Not -Throw
+        }
+    }
+
+    Context "When lock is released during wait period" {
+        It "Should wait and continue after lock is released" {
+            # Create lock with current PID
+            $lockData = @{
+                AccountName = "TestAccount"
+                ProcessId = $PID
+                LockTime = (Get-Date).ToString("o")
+            } | ConvertTo-Json
+            $lockData | Set-Content -Path $script:LOCK_FILE -Force
+
+            # Start background job to remove lock after 0.8 seconds
+            $job = Start-Job -ScriptBlock {
+                param($lockFile)
+                Start-Sleep -Seconds 0.8
+                Remove-Item -Path $lockFile -Force -ErrorAction SilentlyContinue
+            } -ArgumentList $script:LOCK_FILE
+
+            $start = Get-Date
+
+            # Should wait and succeed
+            { Assert-NoExistingLock } | Should -Not -Throw
+
+            $elapsed = ((Get-Date) - $start).TotalSeconds
+
+            # Should have waited at least 0.8 seconds
+            $elapsed | Should -BeGreaterThan 0.7
+
+            # Cleanup
+            $job | Remove-Job -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    Context "When lock remains active after timeout" {
+        It "Should exit process after timeout" {
+            # Create lock with current PID
+            $lockData = @{
+                AccountName = "TestAccount"
+                ProcessId = $PID
+                LockTime = (Get-Date).ToString("o")
+            } | ConvertTo-Json
+            $lockData | Set-Content -Path $script:LOCK_FILE -Force
+
+            # Run in separate process to capture exit code
+            $testScript = @"
+                Import-Module '$PSScriptRoot\..\Start-LastWar.Functions.ps1' -Force
+                `$script:LOCK_FILE = '$($script:LOCK_FILE)'
+                `$script:LOCK_WAIT_TIMEOUT_SECONDS = 1
+                `$script:ERROR_MESSAGE_DISPLAY_SECONDS = 0.1
+                Assert-NoExistingLock
+                exit 0
+"@
+            $result = pwsh.exe -NoProfile -Command $testScript
+
+            # Should have exited with code 1
+            $LASTEXITCODE | Should -Be 1
+        }
+    }
+
+    AfterEach {
+        if (Test-Path $script:LOCK_FILE) {
+            Remove-Item $script:LOCK_FILE -Force -ErrorAction SilentlyContinue
+        }
+    }
+}

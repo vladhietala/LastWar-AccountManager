@@ -63,7 +63,7 @@ Tools/           - Utility scripts (Compare-LastWarKeys.ps1, Launch-LastWar.ps1,
 
 The system follows this sequence when switching accounts:
 
-1. **Lock Check**: Verifies no other instance is running (prevents registry corruption)
+1. **Lock Check with Retry**: Checks for active locks and waits up to 3 seconds for release (enables rapid account switching)
 2. **Lock Creation**: Creates lock file in repository root (`.lastwar.lock`) with account name, PID, and timestamp
 3. **Initialization**: Validates account name exists in Accounts/ folder
 4. **Backup**: Creates timestamped backup in Backups/{AccountName}/ (only if different from last backup based on SHA256 hash)
@@ -157,6 +157,8 @@ Use VSCode's PowerShell debugging (F5) or run with `-Verbose` flag:
 - **Shortcuts Location**: `%APPDATA%\Microsoft\Windows\Start Menu\Programs\FunFly\`
 - **Lock File**: `.lastwar.lock` (in repository root)
 - **Default Max Backups**: 10 per account
+- **Lock Wait Timeout**: 3 seconds (time to wait for lock release before failing)
+- **Lock Retry Interval**: 0.5 seconds (check frequency for lock release)
 - **Registry Decoder**: `Tools/ConvertFrom-RegHex.ps1` (supports Text, Detailed, and JSON output formats)
 - **Unity PlayerPrefs Hash Suffix Pattern**: `_h[0-9]+` (e.g., `_h2665564582`)
 - **GitHub Repository**: Private repository (uses SSH)
@@ -287,15 +289,19 @@ To prevent registry corruption from simultaneous executions:
 
 ### Lock Behavior
 
-- **If lock exists**: Script displays error with details (account name, PID, duration) and exits after 10 seconds
+- **If lock exists**: Script waits up to 3 seconds (configurable via `LOCK_WAIT_TIMEOUT_SECONDS`) for lock release
+- **Retry mechanism**: Checks every 0.5 seconds (configurable via `LOCK_RETRY_INTERVAL_SECONDS`) if lock was released
+- **Rapid account switching**: Allows starting next account script while previous instance is in cleanup/export phase
+- **Timeout handling**: Only shows error after timeout if lock is still active
 - **Lock creation**: Immediately after validation, before any registry operations
 - **Lock release**: Guaranteed via try-finally block, even on errors
 
 ### Lock System Benefits
 
 - Prevents Export-GameRegistry from one account overwriting another account's .reg file
-- Allows safe sequential account switching without corruption
+- Enables seamless rapid account switching - no manual waiting needed
 - Self-healing: automatically removes stale locks from crashed processes
+- Configurable wait time adapts to different system speeds
 
 ## Shortcut Management
 
