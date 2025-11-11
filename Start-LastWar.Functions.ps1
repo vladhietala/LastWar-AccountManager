@@ -36,6 +36,9 @@ if (-not $script:VERBOSE_STATUS_INTERVAL_SECONDS) {
 }
 
 function Test-GameInstallation {
+    [CmdletBinding()]
+    param()
+
     <#
     .SYNOPSIS
         Valida que o jogo está instalado e acessível
@@ -107,6 +110,9 @@ function Test-ScriptLock {
 }
 
 function Remove-OrphanedLock {
+    [CmdletBinding()]
+    param()
+
     <#
     .SYNOPSIS
         Remove arquivo de lock órfão se o processo associado não existir mais
@@ -174,6 +180,11 @@ function Assert-NoExistingLock {
 }
 
 function New-ScriptLock {
+    [CmdletBinding()]
+    param (
+        [string]$AccountName
+    )
+
     <#
     .SYNOPSIS
         Cria um arquivo de lock para prevenir execuções simultâneas
@@ -181,9 +192,6 @@ function New-ScriptLock {
     .PARAMETER AccountName
         Nome da conta que está sendo executada
     #>
-    param (
-        [string]$AccountName
-    )
 
     $lockData = @{
         AccountName = $AccountName
@@ -201,6 +209,9 @@ function New-ScriptLock {
 }
 
 function Remove-ScriptLock {
+    [CmdletBinding()]
+    param()
+
     <#
     .SYNOPSIS
         Remove o arquivo de lock do script
@@ -321,6 +332,13 @@ function Show-ElevationPrompt {
 }
 
 function Request-Elevation {
+    [CmdletBinding()]
+    param (
+        [string]$Conta,
+        [int]$MaxBackups,
+        [hashtable]$BoundParameters
+    )
+
     <#
     .SYNOPSIS
         Solicita elevação de privilégios e relança o script como administrador
@@ -334,11 +352,6 @@ function Request-Elevation {
     .PARAMETER BoundParameters
         Parâmetros bound do cmdlet original
     #>
-    param (
-        [string]$Conta,
-        [int]$MaxBackups,
-        [hashtable]$BoundParameters
-    )
 
     Show-ElevationPrompt
 
@@ -374,6 +387,11 @@ function Request-Elevation {
 }
 
 function Initialize-NewAccount {
+    [CmdletBinding()]
+    param (
+        [string]$Conta
+    )
+
     <#
     .SYNOPSIS
         Inicializa uma nova conta que ainda não existe
@@ -389,9 +407,6 @@ function Initialize-NewAccount {
     .OUTPUTS
         Caminho do arquivo .reg criado, ou $null se deve pular import
     #>
-    param (
-        [string]$Conta
-    )
 
     $accountsPath = Join-Path -Path $script:REGEDIT_ROOT -ChildPath "Accounts"
     $accountFile = Join-Path -Path $accountsPath -ChildPath ("{0}.reg" -f $Conta)
@@ -497,6 +512,13 @@ function Test-BackupNeeded {
 }
 
 function Remove-OldBackups {
+    [CmdletBinding()]
+    param(
+        [string]$BackupFolder,
+        [string]$Conta,
+        [int]$MaxBackups
+    )
+
     <#
     .SYNOPSIS
         Remove backups antigos mantendo apenas os N mais recentes
@@ -510,11 +532,6 @@ function Remove-OldBackups {
     .PARAMETER MaxBackups
         Número máximo de backups a manter
     #>
-    param(
-        [string]$BackupFolder,
-        [string]$Conta,
-        [int]$MaxBackups
-    )
 
     $oldBackups = Get-ChildItem -Path $BackupFolder -Filter "Backup_${Conta}_*.reg" |
         Sort-Object LastWriteTime -Descending |
@@ -579,6 +596,24 @@ function New-RegistryBackup {
 }
 
 function Invoke-RegistryCommand {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateSet('import', 'export', 'delete')]
+        [string]$Operation,
+
+        [Parameter(Mandatory)]
+        [string[]]$Arguments,
+
+        [Parameter(Mandatory)]
+        [string]$SuccessMessage,
+
+        [Parameter(Mandatory)]
+        [string]$ErrorContext,
+
+        [switch]$ContinueOnError
+    )
+
     <#
     .SYNOPSIS
         Executa comandos reg.exe com tratamento de erro padronizado
@@ -601,22 +636,6 @@ function Invoke-RegistryCommand {
     .OUTPUTS
         Retorna $true se sucesso, $false se falhar com ContinueOnError, lança exceção caso contrário
     #>
-    param(
-        [Parameter(Mandatory)]
-        [ValidateSet('import', 'export', 'delete')]
-        [string]$Operation,
-
-        [Parameter(Mandatory)]
-        [string[]]$Arguments,
-
-        [Parameter(Mandatory)]
-        [string]$SuccessMessage,
-
-        [Parameter(Mandatory)]
-        [string]$ErrorContext,
-
-        [switch]$ContinueOnError
-    )
 
     try {
         # Log do comando sendo executado
@@ -725,6 +744,9 @@ function Find-GameProcess {
 }
 
 function Start-GameProcess {
+    [CmdletBinding()]
+    param()
+
     Write-Host "Iniciando The Last War..."
     try {
         # Inicia o launcher
