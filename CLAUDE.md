@@ -17,7 +17,7 @@ This is a Windows Registry management system for "The Last War: Survival Game" t
    - Implements automatic backup system with deduplication
    - Account names are case-insensitive and dynamically discovered from Accounts/ folder
    - **Lock mechanism**: Prevents concurrent executions to avoid registry corruption
-   - **Auto-elevation**: Automatically requests administrator privileges when needed
+   - Runs without administrator privileges
 
 2. **Create-Shortcuts.ps1** - Shortcut management utility
    - Automatically discovers all accounts from Accounts/ folder
@@ -63,7 +63,7 @@ Tools/           - Utility scripts (Compare-LastWarKeys.ps1, Launch-LastWar.ps1,
 
 The system follows this sequence when switching accounts:
 
-1. **Lock Check with Retry**: Checks for active locks and waits up to 3 seconds for release (enables rapid account switching)
+1. **Lock Check with Retry**: Checks for active locks and waits up to 60 seconds for release (enables rapid account switching)
 2. **Lock Creation**: Creates lock file in repository root (`.lastwar.lock`) with account name, PID, and timestamp
 3. **Initialization**: Validates account name exists in Accounts/ folder
 4. **Backup**: Creates timestamped backup in Backups/{AccountName}/ (only if different from last backup based on SHA256 hash)
@@ -157,7 +157,7 @@ Use VSCode's PowerShell debugging (F5) or run with `-Verbose` flag:
 - **Shortcuts Location**: `%APPDATA%\Microsoft\Windows\Start Menu\Programs\FunFly\`
 - **Lock File**: `.lastwar.lock` (in repository root)
 - **Default Max Backups**: 10 per account
-- **Lock Wait Timeout**: 3 seconds (time to wait for lock release before failing)
+- **Lock Wait Timeout**: 60 seconds (time to wait for lock release before failing)
 - **Lock Retry Interval**: 0.5 seconds (check frequency for lock release)
 - **Registry Decoder**: `Tools/ConvertFrom-RegHex.ps1` (supports Text, Detailed, and JSON output formats)
 - **Unity PlayerPrefs Hash Suffix Pattern**: `_h[0-9]+` (e.g., `_h2665564582`)
@@ -168,7 +168,7 @@ Use VSCode's PowerShell debugging (F5) or run with `-Verbose` flag:
 - PowerShell Core (`#Requires -PSEdition core` in Start-LastWar.ps1)
 - Windows Registry access (uses `reg.exe` commands)
 - Write permissions to script directory for backups
-- **Administrator privileges**: The script automatically elevates itself when needed (auto-elevation)
+- Administrator privileges are not required by the account switcher.
 
 ## PowerShell Coding Conventions
 
@@ -243,37 +243,10 @@ All scripts use proper error handling with try-catch blocks. The main script wil
 The game launch process uses a polling mechanism:
 
 - Searches for processes matching `*LastWar*` pattern
-- 90-second timeout with 1-second intervals (increased to accommodate UAC prompts)
+- 90-second timeout with 1-second intervals
 - Progress messages every 10 seconds when using `-Verbose`
 - Waits for game process to exit before exporting registry changes
 - 1-second grace period after exit for write operations to complete
-
-## Administrator Privileges (Auto-Elevation)
-
-The game requires administrator privileges to run. The script handles this automatically:
-
-### Auto-Elevation Mechanism
-
-- Detects if running without admin privileges using `Test-Administrator` function
-- Automatically re-launches itself elevated using `Start-Process -Verb RunAs`
-- Preserves all command-line parameters (`-Conta`, `-MaxBackups`, `-Verbose`)
-- Displays clear messages during elevation process
-- Uses `$PSCommandPath` with fallbacks for reliable script path resolution
-
-### Auto-Elevation Benefits
-
-- **No manual UAC prompts during gameplay**: UAC prompt appears once at script start
-- **Seamless experience**: Users don't need to manually run as admin
-- **Works with shortcuts**: Start Menu shortcuts work normally without special configuration
-- **Single window**: Elevated process runs independently, original process exits cleanly
-- **Fail-safe**: If elevation fails, shows clear error message
-
-### Auto-Elevation Behavior
-
-- If already running as admin: continues normally (no re-launch)
-- If not admin: shows yellow banner, requests elevation, original process exits
-- If user cancels UAC: elevated process never starts, clean exit
-- Pre-elevation window is visible for debugging purposes
 
 ## Concurrency Control (Lock System)
 
@@ -289,7 +262,7 @@ To prevent registry corruption from simultaneous executions:
 
 ### Lock Behavior
 
-- **If lock exists**: Script waits up to 3 seconds (configurable via `LOCK_WAIT_TIMEOUT_SECONDS`) for lock release
+- **If lock exists**: Script waits up to 60 seconds (configurable via `LOCK_WAIT_TIMEOUT_SECONDS`) for lock release
 - **Retry mechanism**: Checks every 0.5 seconds (configurable via `LOCK_RETRY_INTERVAL_SECONDS`) if lock was released
 - **Rapid account switching**: Allows starting next account script while previous instance is in cleanup/export phase
 - **Timeout handling**: Only shows error after timeout if lock is still active

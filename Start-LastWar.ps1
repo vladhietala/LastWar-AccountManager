@@ -137,11 +137,6 @@ try {
     Remove-OrphanedLock
     Assert-NoExistingLock
 
-    # Check if privilege elevation is needed (after lock validation)
-    if (-not (Test-Administrator)) {
-        Request-Elevation -Account $Account -MaxBackups $MaxBackups -BoundParameters $PSBoundParameters
-    }
-
     # Create lock for this instance
     New-ScriptLock -AccountName $Account
 

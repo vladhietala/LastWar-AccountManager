@@ -17,6 +17,7 @@ A PowerShell-based Windows Registry management system for switching between mult
 - Windows OS
 - PowerShell Core
 - The Last War: Survival Game installed at `%LOCALAPPDATA%\FunFly\Last War-Survival Game\`
+- Administrator privileges are not required to run the account switcher.
 
 ## Quick Start
 
@@ -110,4 +111,4 @@ This project is personal tooling. Use at your own risk.
 
 ## Author
 
-Vlad
+#1306 [SOF]Vlad Țepeș ঌ (retired)

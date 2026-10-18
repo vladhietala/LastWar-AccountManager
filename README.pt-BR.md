@@ -14,7 +14,8 @@ Um sistema de gerenciamento de Registro do Windows baseado em PowerShell para al
 
 - Windows OS
 - PowerShell Core
-- The Last War: Survival Game instalado em `C:\Users\[username]\AppData\Local\FunFly\Last War-Survival Game\`
+- The Last War: Survival Game instalado em `%LOCALAPPDATA%\FunFly\Last War-Survival Game\`
+- Não é necessário executar o gerenciador como administrador.
 
 ## Início Rápido
 
@@ -107,4 +108,4 @@ Este projeto é uma ferramenta pessoal. Use por sua conta e risco.
 
 ## Autor
 
-Vlad
+#1306 [SOF]Vlad Țepeș ঌ (retired)

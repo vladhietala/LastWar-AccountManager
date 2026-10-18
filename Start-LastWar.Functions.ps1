@@ -36,8 +36,8 @@ if (-not $script:VERBOSE_STATUS_INTERVAL_SECONDS) {
 }
 if (-not $script:LOCK_WAIT_TIMEOUT_SECONDS) {
     # Total time to wait for lock release during grace period and export
-    # Grace period (1s) + typical export time + buffer = ~3 seconds total
-    $script:LOCK_WAIT_TIMEOUT_SECONDS = 3
+    # Allow enough time for a previous instance to finish exporting registry data.
+    $script:LOCK_WAIT_TIMEOUT_SECONDS = 60
 }
 if (-not $script:LOCK_RETRY_INTERVAL_SECONDS) {
     $script:LOCK_RETRY_INTERVAL_SECONDS = 0.5
